@@ -1,0 +1,30 @@
+# Preinstalled packages the "lean" farm golden disables with `pm disable-user --user 0` (allowed for the shell
+# user on the android-36.1 Play Store image). None of them is needed by typical app tests; Play Store, Google
+# Play services, the launcher, System UI, Settings, WebView, Chrome, Contacts and the IME stay enabled.
+# Re-enable on a device with `adb shell pm enable <pkg>`.
+com.google.android.apps.messaging
+com.google.android.dialer
+com.google.android.googlequicksearchbox
+com.google.android.apps.safetyhub
+com.google.android.apps.wellbeing
+com.google.android.marvin.talkback
+com.google.android.apps.accessibility.voiceaccess
+com.google.android.accessibility.switchaccess
+com.google.android.apps.youtube.music
+com.google.android.youtube
+com.google.android.apps.photos
+com.google.android.apps.maps
+com.google.android.gm
+com.google.android.calendar
+com.google.android.apps.docs
+com.google.android.projection.gearhead
+com.google.android.glasses.core
+com.google.android.apps.restore
+com.google.android.deskclock
+com.google.android.tts
+com.google.android.settings.intelligence
+com.google.android.as
+com.google.android.feedback
+com.google.android.apps.customization.pixel
+com.android.camera2
+com.android.egg

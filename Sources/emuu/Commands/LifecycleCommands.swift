@@ -84,6 +84,9 @@ struct Start: AsyncParsableCommand {
     @Option(help: "Seconds to wait for Android to finish booting.")
     var bootTimeout: Int = 600
 
+    @Flag(help: "Self-healing: periodic health checks, automatic recovery of a hung or dead engine (saved for the instance).")
+    var selfHeal = false
+
     @Flag(name: .customLong("supervise-child"), help: .hidden)
     var superviseChild = false
 
@@ -103,7 +106,7 @@ struct Start: AsyncParsableCommand {
                                       idleFreezeAfter: idleFreeze.map { .minutes($0) },
                                       automation: automation || config.isAutomationMode),
             launch: EngineLaunchOptions(coldBoot: coldBoot, bootTimeout: .seconds(bootTimeout)),
-            echo: true, quiet: quiet)
+            echo: true, quiet: quiet, selfHeal: selfHeal || config.isSelfHealing)
     }
 
     /// Arguments for the detached child (same choices, plus the internal flag).
@@ -115,6 +118,7 @@ struct Start: AsyncParsableCommand {
         if let idleFreeze { args += ["--idle-freeze", String(idleFreeze)] }
         if quiet { args.append("--quiet") }
         if automation { args.append("--automation") }
+        if selfHeal { args.append("--self-heal") }
         args += ["--boot-timeout", String(bootTimeout)]
         return args
     }
@@ -125,6 +129,9 @@ struct Start: AsyncParsableCommand {
         let registry = SupervisorRegistry(paths: ctx.paths)
         if automation && !config.isAutomationMode && !superviseChild {
             config = try ctx.store.updatePreferences(config.id) { $0.automationMode = true }
+        }
+        if selfHeal && !config.isSelfHealing && !superviseChild {
+            config = try ctx.store.updatePreferences(config.id) { $0.selfHeal = true }
         }
         if let live = registry.liveSupervisor(for: config.id) {
             let state = live.status?.engineState ?? "unknown"
@@ -434,7 +441,11 @@ struct Status: AsyncParsableCommand {
                 reading = await MemoryReading.sample(ctx: ctx, enginePID: st.enginePID, serial: nil)
             }
             let g = st.governor
-            let gov = g.enabled ? "\(g.profile) level \(g.level), tier \(g.tier), \(g.actionsApplied) actions" + (g.creepActive ? ", creep detected" : "") : "off"
+            var gov = g.enabled ? "\(g.profile) level \(g.level), tier \(g.tier), \(g.actionsApplied) actions" + (g.creepActive ? ", creep detected" : "") : "off"
+            if let h = st.selfHeal, h.enabled {
+                gov += "; self-heal \(h.failed ? "GAVE UP" : "on")" + (h.lastVerdict.map { ", last check \($0)" } ?? "")
+                    + (h.recoveries > 0 ? ", \(h.recoveries) recoveries" : "")
+            }
             return Row(instance: id.rawValue, state: st.engineStateDetail, serial: st.serial, enginePID: st.enginePID,
                        supervisorPID: st.pid, governor: gov, memory: reading)
         }

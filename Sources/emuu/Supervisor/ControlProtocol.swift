@@ -26,6 +26,12 @@ struct ControlRequest: Codable, Sendable, Hashable {
         case touch
         /// Turn automation mode on/off (`enabled`).
         case automation
+        /// Reboot (`rebootMode`: soft, hard, cold).
+        case reboot
+        /// Health check + escalation ladder; the reply's `message` is the `HealResult` JSON.
+        case heal
+        /// Health check only; the reply's `message` is the `HealthReport` JSON.
+        case health
     }
 
     var command: Command
@@ -39,9 +45,12 @@ struct ControlRequest: Codable, Sendable, Hashable {
     var cachesBytes: UInt64?
     /// `automation`: the new mode.
     var enabled: Bool?
+    /// `reboot`: soft, hard or cold.
+    var rebootMode: String?
 
     init(command: Command, save: Bool? = nil, kill: Bool? = nil, since: UInt64? = nil, visible: Bool? = nil,
-         level: TrimMemoryLevel? = nil, cachesBytes: UInt64? = nil, enabled: Bool? = nil) {
+         level: TrimMemoryLevel? = nil, cachesBytes: UInt64? = nil, enabled: Bool? = nil, rebootMode: String? = nil) {
+        self.rebootMode = rebootMode
         self.enabled = enabled
         self.command = command
         self.save = save
@@ -133,4 +142,17 @@ struct SupervisorStatus: Codable, Sendable, Hashable {
     var governor: Governor
     var lastSample: HistoryPoint?
     var lastEvent: String?
+    /// Self-healing (optional for status files written by older builds).
+    var selfHeal: SelfHealStatus?
+}
+
+struct SelfHealStatus: Codable, Sendable, Hashable {
+    var enabled: Bool
+    var lastVerdict: String?
+    var lastReason: String?
+    var lastCheckAt: Date?
+    var hangsDetected: Int
+    var recoveries: Int
+    /// Circuit breaker open: recovery gave up.
+    var failed: Bool
 }

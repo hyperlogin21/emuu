@@ -1,6 +1,40 @@
 # Emuu handoff
 
-Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (not a git repository; nothing has been committed).
+Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub; the orchestrator commits).
+
+## Status update (2026-11-19, automation farm)
+
+Goal now: an automation test farm on this MacBook (16 GB, 10 cores): **2 emulators at once**, reliably, for long
+sessions, Mac stays usable; scalable to Macs with up to 48 GB; self-healing. Built by one agent under an isolated
+`EMUU_HOME` (scratch); the real `~/.emuu` (incl. `emuu-dev2` with the user's Google sign-in) was not touched.
+
+- **New target `EmuuFarm`** + CLI: `golden create|seal|list|delete`, `clone`, `farm up|down|acquire|release|heartbeat|status|capacity|gc`
+  (hidden `farm daemon`), `run`, `health`, `heal`, `reboot`, `start --self-heal`. README sections "Automation farm" and
+  "Self-healing"; ARCHITECTURE.md section; measurements in BENCHMARKS.md "Farm" and engine-findings.md "Farm findings".
+- **Clones:** APFS `clonefile` of the golden AVD incl. its quick-boot snapshot; resume to adb-ready ≈ 2 s. The snapshot's
+  `hardware.ini` must be rewritten and the golden's own `config.ini` kept, otherwise the engine cold-boots.
+  Engine `-read-only` was measured and rejected (it writes into the golden's directory, leaks /tmp overlays).
+- **Reset** = console `avd snapshot load default_boot` in the running engine (≈ 1–1.8 s, app data verified gone) +
+  a 3 s settle check of the guest boot id; recycle (kill + re-clone + resume) ≈ 2 s + check.
+- **Memory:** Activity Monitor's 4.5 GB per engine double-counts guest RAM; real cost ≈ guest RAM + 0.8 GB
+  (2048 MB guest: 2.86 GB after a 10-minute loop). Capacity guard: min(memory, cores/2, 16 ports); 2 devices on 16 GB.
+- **Soak (acceptance):** 2 devices, 35 min, 13 528 adb commands OK, 4 failed (all at injected faults), 84 resets,
+  0 guest reboots, memory pressure normal throughout, swap flat; SIGSTOP + kill -9 injected → pool back to 2 healthy
+  devices in 13 s. Details and the profile table in BENCHMARKS.md "Farm".
+- **Default farm profile:** 2048 MB / 2 vCPUs / host GPU (fastest measured: 17 loop iterations/min per device;
+  1536 MB is ≈ 20 % slower for 0.5 GB less, 1024 MB half as fast, swiftshader slower and bigger).
+- **Self-healing:** `emuu health` (layered probes), `emuu heal` (confirm, then thaw → reconnect adb → soft reboot → hard
+  restart → cold boot), `emuu reboot --soft|--hard|--cold`, `emuu start --self-heal` (20 s checks, 2 confirmations,
+  backoff, circuit breaker after 3 attempts / 30 min). Pools self-heal by default; leased devices that fail two checks are
+  marked `device_lost` and replaced. Verified for real: external SIGSTOP, kill -9, adb transport drop (see
+  docs/evidence/farm-integration-2026-11-19.txt and the soak).
+- **Open / not verified:** `--lean` (one benchmark run had simultaneous command failures on both devices, cause not
+  found; not the default); a framework deadlock could not be provoked as the shell user (`am hang` parks one binder
+  thread only; `am crash` on system_server does nothing), so the framework probe is verified on healthy devices and in
+  unit tests only; no "engine CPU pegged without progress" probe; clones share the golden's android_id; capacity on
+  24–48 GB Macs is an estimate; the app has no health badge (CLI only).
+- A `swiftpm-testing-helper … EmuuDisplayTests` process started 2026-11-18 23:48 (before this agent) is still running;
+  left alone.
 
 ## Status update (2026-11-19, later)
 

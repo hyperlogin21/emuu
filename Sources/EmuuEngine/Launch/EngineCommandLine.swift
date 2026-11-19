@@ -24,9 +24,13 @@ public struct EngineLaunchOptions: Sendable, Hashable {
     public var extraArguments: [String]
     /// Raw QEMU arguments, passed after `-qemu`.
     public var qemuArguments: [String]
+    /// Start the gRPC display/input service (`-grpc`). An idle listener costs nothing measurable; farm devices keep
+    /// it so `emuu screenshot` and the app can still show them.
+    public var grpc: Bool
 
     public init(coldBoot: Bool = false, bootTimeout: Duration = .seconds(600), netfast: Bool = true,
-                extraArguments: [String] = [], qemuArguments: [String] = []) {
+                extraArguments: [String] = [], qemuArguments: [String] = [], grpc: Bool = true) {
+        self.grpc = grpc
         self.coldBoot = coldBoot
         self.bootTimeout = bootTimeout
         self.netfast = netfast
@@ -56,8 +60,12 @@ public enum EngineCommandLine {
         if options.netfast { args.append("-netfast") }
         if !config.audioOutput { args.append("-no-audio") }
         if options.coldBoot { args.append("-no-snapshot-load") }
+        if config.discardStateOnExit == true { args.append("-no-snapshot-save") }
         args += options.extraArguments
-        if !options.qemuArguments.isEmpty { args += ["-qemu"] + options.qemuArguments }
+        var qemu = options.qemuArguments
+        // The engine raises -memory below its floor (2048 MB on android-36.1); QEMU's own -m wins.
+        if config.isGuestRAMEnforced && !qemu.contains("-m") { qemu = ["-m", String(config.ramMB)] + qemu }
+        if !qemu.isEmpty { args += ["-qemu"] + qemu }
         return args
     }
 

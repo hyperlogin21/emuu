@@ -212,6 +212,54 @@ below was checked against 36.4.9 with an isolated instance (lite, 720x1600) and 
 * Six further resume cycles did not restart (five from 1–2-minute sessions, one from a 20-minute busy session
   followed by the user's exact T1→T2 timeline). See docs/memory-governor.md ("Guest restarts").
 
+
+## Farm findings (measured 2026-11-19, isolated EMUU_HOME)
+
+* **Guest RAM floor and how to go below it.** `-memory 1024` (or `hw.ramSize=1024`) is raised by the engine: the
+  log says "Increasing RAM size to 2048MB" and the guest sees MemTotal 2018420 kB. Appending `-qemu -m 1024` wins
+  (QEMU's last `-m`): MemTotal 990852 kB, the engine's `hardware-qemu.ini` still says 2048. Emuu does this only
+  for instances with `guestRAMEnforced` (farm goldens below 2048 MB). A snapshot must always be loaded with the RAM
+  size it was saved with.
+* **The engine's `phys_footprint` counts guest RAM twice.** For a 2048 MB guest after a 10-minute test loop:
+  `phys_footprint` 4.9 GB, `footprint -p` 2.86 GB; the difference is 2.0 GB = the guest RAM (for 1536 MB:
+  3.86 vs 2.35 GB, difference 1.5 GB). vmmap shows the guest RAM once as a 2.0 GB "shared memory" region; the
+  ledger also charges the Hypervisor.framework mapping of the same pages. Starting one engine on an idle Mac raised
+  anonymous+wired+compressor pages by ~2.5 GB, matching `footprint`, not `phys_footprint`.
+* **Cloning an AVD with its quick-boot snapshot** (`cp -c` / `clonefile(2)`, 0.03 s for a 3 GB AVD): the clone
+  loads `default_boot` only if `snapshots/default_boot/hardware.ini` matches the clone's launch config. With the
+  golden's paths and `avd.name` left in it: "ERROR | The emulator hardware cannot load snapshot: default_boot" and
+  a cold boot. Rewriting the AVD paths and `avd.name`/`avd.id` is enough ("Successfully loaded snapshot
+  'default_boot' using 491 ms", adb-ready 1.3–2.5 s). The config.ini must be the golden's own: the engine rewrites
+  `disk.dataPartition.size` 4096M → 6442450944 on first boot, and a clone with a regenerated 4096M config.ini also
+  failed to load the snapshot. `snapshot.pb` keeps the golden's absolute disk paths; the engine does not use them
+  for a quick-boot load (the clone writes only its own files).
+* **Every clone resumes the golden's running kernel**: the guest `boot_id` (and uptime) equal the golden's at
+  seal time. A different boot id on a farm device therefore means the guest rebooted.
+* **Per-device identity.** `ro.serialno` is `EMULATOR36X4X9X0` on every engine of this version; `android_id`
+  (settings secure) is created on first boot and copied into every clone; no IMEI is readable as shell
+  (`service call iphonesubinfo 1` → permission error). adb serials and ports differ. The non-root image gives the
+  shell user no way to regenerate these.
+* **Reset in place**: console `avd snapshot load default_boot` (or `adb emu avd snapshot load default_boot`) on a
+  running clone returns in ~0.8 s; adb drops the transport for a moment (`device 'emulator-5554' not found`), then
+  answers; an installed app, files in /sdcard and /data/local/tmp and a changed setting were gone, boot id back to
+  the golden's. Works with `-no-snapshot-save` (farm devices never save, so the named-snapshot problem above does not
+  arise; whether a load alone affects later quick-boot saves was not tested).
+* **`-read-only`** (several engines on one AVD): two engines from one golden resumed in 1.9 s each with the same
+  footprint as clones, but each wrote into the golden's directory (`userdata-qemu.img.qcow2` mtime and size,
+  `cache.img.qcow2`, `initrd`, a `data/` dir, `hardware-qemu.ini`, `emu-launch-params.txt`), and their writable
+  overlays live in `/tmp/android-<user>/emulator-*.qcow2` (up to 260 MB each here); a SIGKILLed engine left three
+  of them behind. Rejected in favour of clones.
+* **Fault provocation as the shell user (android-36.1 Play image):** `am hang` is accepted ("Hanging the
+  system...") but blocks only the calling binder thread: `cmd activity`, `dumpsys activity/window`, `pm`,
+  `input` and `service call activity` all kept answering in < 1 s, so no probe can (or needs to) see it.
+  `am crash <system_server pid>` had no effect. `adb disconnect emulator-5554` removes the transport; the adb
+  server re-adds it within a second (`adb -s … get-state` alone brings it back), so health checks confirm a
+  transport fault before acting. SIGSTOP from outside and `kill -9` are the reliable hang/death injections.
+* **Process-group signals from a Swift CLI:** a child started with `posix_spawn` from a Swift concurrency thread
+  inherited a signal mask with SIGTERM blocked, so `kill(-pgid, SIGTERM)` returned 0 but the command never saw it
+  (`emuu run` forwarding). `POSIX_SPAWN_SETSIGMASK` with an empty mask (plus `SETSIGDEF` for the signals Emuu
+  ignores while forwarding) fixed it; unit test `forwardedSignalReachesTheCommand`.
+
 ## Unverified / open
 
 * The `lite` preset (1536 MB, 2 vCPUs) has not been booted. Only `standard` (2048/4) was measured.

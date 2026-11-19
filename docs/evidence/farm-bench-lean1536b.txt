@@ -1,0 +1,32 @@
+== farm-bench lean1536b: guest 1536 MB, 2 cores, gpu host, lean=1, loop 600s, 2026-11-19 10:59:48
+host before: nonfile=8410MiB compressor=3452MiB swap=4968.75M pressure=1 free=56%
+golden cold boot: 19.46 s
+lean: disabled 26 packages
+golden after settle: engine 3373M/real 1841MB, guest MemAvailable: 594680 kB
+clone a: 0.03 s
+clone b: 0.03 s
+clone disk: du (apparent sharing ignored) 2.1G; volume free 118Gi
+resume a: 1.59 s
+resume b: 1.65 s
+  INFO         | Loading snapshot 'default_boot'...
+  INFO         | Successfully loaded snapshot 'default_boot' using 854 ms
+  INFO         | Loading snapshot 'default_boot'...
+  INFO         | Successfully loaded snapshot 'default_boot' using 874 ms
+after boot+30s: engine a 3469M/real 2156MB b 3454M/real 2154MB; host nonfile=12253MiB compressor=3846MiB swap=4968.75M pressure=1 free=54%
+  t+30s engine a 3736M/real 2282MB b 3727M/real 2271MB; host nonfile=12546MiB compressor=3605MiB swap=4968.75M pressure=1 free=53%
+  t+60s engine a 3778M/real 2293MB b 3775M/real 2290MB; host nonfile=12621MiB compressor=3591MiB swap=4968.75M pressure=1 free=55%
+  t+90s engine a 3797M/real 2309MB b 3792M/real 2305MB; host nonfile=12519MiB compressor=3764MiB swap=4968.75M pressure=1 free=53%
+  11:04:33 emulator-5578 FAIL: adb shell input swipe 360 1200 360 400 150
+  11:04:33 emulator-5578 FAIL: adb shell uiautomator dump /sdcard/emuu-ui.xml
+  11:04:33 emulator-5578 aborting: device not answering
+emulator-5578 iterations=30 ok=380 failed=2 secs=95 iter_per_min=18.9 boot_id_changes=0 aborted=1
+  11:04:45 emulator-5580 FAIL: adb shell input swipe 360 1200 360 400 150
+  11:04:45 emulator-5580 FAIL: adb shell uiautomator dump /sdcard/emuu-ui.xml
+  11:04:45 emulator-5580 aborting: device not answering
+emulator-5580 iterations=34 ok=432 failed=2 secs=107 iter_per_min=19.1 boot_id_changes=0 aborted=1
+after loop: engine a 3820M/real 2230MB b 3821M/real 2303MB; host nonfile=12376MiB compressor=3657MiB swap=4968.75M pressure=1 free=53%
+reset 1 (snapshot load → adb-ready): 1.35 s; test app after reset: gone
+reset 2 (snapshot load → adb-ready): 1.39 s; test app after reset: gone
+reset 3 (snapshot load → adb-ready): 1.40 s; test app after reset: gone
+after resets: engine a 3902M/real 2371MB
+host after cleanup: nonfile=8307MiB compressor=3389MiB swap=4968.75M pressure=1 free=57%

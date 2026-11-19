@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "EmuuMemory", targets: ["EmuuMemory"]),
         .library(name: "EmuuGRPC", targets: ["EmuuGRPC"]),
         .library(name: "EmuuDisplay", targets: ["EmuuDisplay"]),
+        .library(name: "EmuuFarm", targets: ["EmuuFarm"]),
         .library(name: "EmuuTestSupport", targets: ["EmuuTestSupport"]),
     ],
     dependencies: [
@@ -36,11 +37,13 @@ let package = Package(
         // dependencies, no protoc: the few messages are hand-encoded (see EmulatorMessages.swift).
         .target(name: "EmuuGRPC", dependencies: ["EmuuBase", "CEmuuShim"]),
         .target(name: "EmuuDisplay", dependencies: ["EmuuBase", "EmuuGRPC"]),
+        // Automation farm: golden images, clones, pool state + leases, capacity guard, health checks and self-healing.
+        .target(name: "EmuuFarm", dependencies: ["EmuuBase", "EmuuEngine"]),
 
         .executableTarget(
             name: "emuu",
             dependencies: [
-                "EmuuBase", "EmuuEngine", "EmuuADB", "EmuuMemory", "EmuuGRPC", "EmuuDisplay",
+                "EmuuBase", "EmuuEngine", "EmuuADB", "EmuuMemory", "EmuuGRPC", "EmuuDisplay", "EmuuFarm",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
@@ -57,6 +60,7 @@ let package = Package(
         .testTarget(name: "EmuuMemoryTests", dependencies: ["EmuuMemory", "EmuuTestSupport"]),
         .testTarget(name: "EmuuGRPCTests", dependencies: ["EmuuGRPC", "EmuuTestSupport"]),
         .testTarget(name: "EmuuDisplayTests", dependencies: ["EmuuDisplay", "EmuuTestSupport"]),
+        .testTarget(name: "EmuuFarmTests", dependencies: ["EmuuFarm", "EmuuEngine", "EmuuTestSupport"]),
         // CLI tests import the executable target (`@testable import emuu`).
         .testTarget(name: "emuuTests", dependencies: ["emuu", "EmuuTestSupport"]),
         // App logic tests import the app executable (`@testable import EmuuApp`).

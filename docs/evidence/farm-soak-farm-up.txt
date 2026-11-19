@@ -1,0 +1,12 @@
+Pool 'default': daemon pid 54605 starting 2 device(s) from base (log: /tmp/claude-501/-Users-leslie-dev-emuu/c4db58ba-5e83-40c0-a7f6-74dbd9155ac5/scratchpad/eh/farm/pools/default/daemon.log)…
+2 device(s) ready in 5.7 s.
+pool default: golden base, size 2, daemon pid 54605, host capacity 2 (memory)
+  DEVICE          SERIAL         STATE  LEASE  RESETS  HEALTH
+  farm-default-1  emulator-5554  ready  -      0       healthy
+  farm-default-2  emulator-5556  ready  -      0       healthy
+  counters: acquires 0, releases 0, resets 0 (failed 0), replacements 0, expired leases 0, hangs detected 0, recoveries 0, guest reboots 0
+  11:18:32 daemon : pid 54605 started
+  11:18:32 add farm-default-1: new device on port 5554
+  11:18:32 add farm-default-2: new device on port 5556
+  11:18:38 ready farm-default-1: adb-ready in 5.23 s
+  11:18:38 ready farm-default-2: adb-ready in 5.24 s

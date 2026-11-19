@@ -5,6 +5,7 @@ import EmuuBase
 import EmuuEngine
 import EmuuADB
 import EmuuDisplay
+import EmuuFarm
 
 /// One doctor finding.
 struct DoctorCheck: Codable, Sendable, Hashable {
@@ -39,6 +40,11 @@ struct DoctorFacts: Sendable {
     var engineGRPCAvailable: Bool
     var instanceCount: Int
     var runningInstances: [String]
+    /// Farm: APFS clone support on the EMUU_HOME volume, its free space, and the capacity estimate.
+    var supportsClones: Bool? = nil
+    var freeDiskBytes: UInt64? = nil
+    var farmCapacity: CapacityReport? = nil
+    var farmCost: DeviceCost? = nil
 
     static let minimumEmulator = [35, 0, 0]
 
@@ -62,7 +68,7 @@ struct DoctorFacts: Sendable {
             : DoctorCheck(name: "Hypervisor.framework", level: .fail, detail: "Hardware virtualisation is unavailable (kern.hv_support = 0); the engine cannot run (inside a VM?)."))
         let gib = Double(physicalMemoryBytes) / Double(ByteCount.gib)
         out.append(DoctorCheck(name: "Host memory", level: gib < 8 ? .warn : .ok,
-                               detail: String(format: "%.0f GiB", gib) + (gib < 8 ? "; use `emuu create --preset lite` and one instance at a time" : "; a 2 GB guest costs about 4 GiB of host memory")))
+                               detail: String(format: "%.0f GiB", gib) + (gib < 8 ? "; use `emuu create --preset lite` and one instance at a time" : "; a 2 GB guest costs about 2.8 GiB of real host memory (Activity Monitor shows ~4.5 GiB: it counts guest RAM twice)")))
 
         guard let sdkRoot else {
             out.append(DoctorCheck(name: "Android SDK", level: .fail, detail: sdkError ?? "not found",
@@ -125,6 +131,27 @@ struct DoctorFacts: Sendable {
         out.append(DoctorCheck(name: "Instances", level: instanceCount == 0 ? .info : .ok,
                                detail: instanceCount == 0 ? "none yet" : "\(instanceCount) (running: \(runningInstances.joined(separator: ", ").ifEmpty("none")))",
                                fix: instanceCount == 0 ? "emuu create phone && emuu start phone" : nil))
+        out += farmChecks()
+        return out
+    }
+
+    func farmChecks() -> [DoctorCheck] {
+        var out: [DoctorCheck] = []
+        if let clones = supportsClones {
+            out.append(clones
+                ? DoctorCheck(name: "Farm: APFS clones", level: .ok, detail: "\(emuuHome) supports clonefile(2): a farm device costs only the blocks it changes")
+                : DoctorCheck(name: "Farm: APFS clones", level: .warn, detail: "\(emuuHome) is not on APFS: every farm device would be a full ~3 GB copy",
+                              fix: "export EMUU_HOME=<a directory on an APFS volume>"))
+        }
+        if let free = freeDiskBytes {
+            let low = free < 20 * ByteCount.gib
+            out.append(DoctorCheck(name: "Farm: free disk", level: low ? .warn : .ok,
+                                   detail: "\(ByteCount.format(free)) free; a golden image takes ~3.5 GB; a device adds only what it writes (measured ≈ 0.3 GB per device in a 35-minute soak)"))
+        }
+        if let cap = farmCapacity, let cost = farmCost {
+            out.append(DoctorCheck(name: "Farm: capacity", level: cap.ceiling >= 1 ? .info : .warn,
+                                   detail: CapacityText.describe(cap, cost: cost).replacingOccurrences(of: "\n", with: "\n       ")))
+        }
         return out
     }
 }
@@ -199,6 +226,12 @@ struct Doctor: AsyncParsableCommand {
         } catch {
             facts.sdkError = describe(error)
         }
+        let farmRoot = paths.root
+        facts.supportsClones = InstanceStore.supportsClones(at: farmRoot)
+        facts.freeDiskBytes = (try? farmRoot.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage).map { UInt64(max(0, $0)) }
+        let cost = FarmProfile.measuredCost
+        facts.farmCost = cost
+        facts.farmCapacity = CapacityGuard.evaluate(host: .current(), cost: cost, running: facts.runningInstances.count)
         if let adb = facts.adbPath {
             do {
                 facts.adbServerVersion = try await ADBServer(endpoint: .fromEnvironment(environment), adbExecutable: URL(fileURLWithPath: adb)).version()

@@ -4,6 +4,7 @@ import EmuuBase
 import EmuuEngine
 import EmuuADB
 import EmuuMemory
+import EmuuFarm
 
 /// How a supervisor run should look.
 struct SupervisorOptions: Sendable {
@@ -16,6 +17,9 @@ struct SupervisorOptions: Sendable {
     /// Print state changes, tier changes, actions and (unless quiet) each sample to stdout.
     var echo = true
     var quiet = false
+    /// Periodic health checks with automatic recovery (`--self-heal`).
+    var selfHeal = false
+    var selfHealInterval: Duration = .seconds(20)
 }
 
 /// Why a supervisor ended.
@@ -59,6 +63,14 @@ actor Supervisor {
     private var events: [SequencedEvent] = []
     private var nextSeq: UInt64 = 1
     private static let eventCapacity = 512
+
+    // Self-healing (see `selfHealLoop`).
+    private var healState = SelfHealState()
+    private var hangsDetected = 0
+    private var recoveries = 0
+    private var lastHealth: HealthReport?
+    /// A recovery/reboot is restarting the engine: its stop/crash states are expected, not the end of the session.
+    private var recovering = false
 
     private var exitContinuation: CheckedContinuation<SupervisorExit, Never>?
     private var pendingExit: SupervisorExit?
@@ -144,6 +156,10 @@ actor Supervisor {
             echo("Memory governor on (profile \(options.governor.profile.rawValue); idle freeze \(gc.freezeWhenHiddenAfter.map { "after \(Fmt.uptime($0.timeInterval))" } ?? "off"); samples → \(registry.samplesFile(for: id).path)).")
         } else {
             echo("Memory governor off (--no-governor).")
+        }
+        if options.selfHeal {
+            echo("Self-healing on: health check every \(Fmt.seconds(options.selfHealInterval)); hung/dead engines are recovered automatically (history: `emuu health \(id) --history`).")
+            tasks.append(Task { [weak self] in await self?.selfHealLoop() })
         }
         let supervisorLog = registry.logFile(for: id)
         tasks.append(Task { [weak self] in
@@ -232,9 +248,14 @@ actor Supervisor {
         if state == .running, let serial = await engine?.serial() { shell?.follow(serial) }
         writeStatus()
         if !shuttingDown { echo("[\(Fmt.time(Date()))] engine \(state)") }
+        if recovering { return }
         switch state {
         case .crashed(let reason):
             guard !shuttingDown, engineWasUp else { return }
+            if options.selfHeal && !healState.failed {
+                Task { [weak self] in await self?.recover(.hardRestart, reason: "engine crashed: \(reason)") }
+                return
+            }
             finish(.engineGone("engine crashed: \(reason)"))
         case .stopped:
             guard !shuttingDown, engineWasUp else { return }
@@ -310,7 +331,72 @@ actor Supervisor {
                             hibernateWhenFrozenAfterSeconds: gc.automationMode ? nil : gc.hibernateWhenFrozenAfter?.timeInterval,
                             automationMode: gc.automationMode,
                             adbActivitySecondsAgo: g?.lastADBActivity.map { (SystemClock().monotonicNow() - $0).timeInterval }),
-            lastSample: g?.lastSample, lastEvent: lastEventText)
+            lastSample: g?.lastSample, lastEvent: lastEventText,
+            selfHeal: SelfHealStatus(enabled: options.selfHeal, lastVerdict: lastHealth?.verdict.rawValue, lastReason: lastHealth?.reason,
+                                     lastCheckAt: lastHealth?.checkedAt, hangsDetected: hangsDetected, recoveries: recoveries,
+                                     failed: healState.failed))
+    }
+
+    // MARK: self-healing
+
+    /// Cheap probes every `selfHealInterval`, the deep (UI) probe every 6th time. Skips while the engine is
+    /// intentionally frozen/hibernated, booting or being restarted. A fault must be seen twice in a row (a dead
+    /// engine once) before anything is done; recoveries back off exponentially and stop after 3 within 30 min
+    /// (circuit breaker; shown as `selfHeal.failed` in the status).
+    private func selfHealLoop() async {
+        var n = 0
+        while !Task.isCancelled {
+            try? await Task.sleep(for: options.selfHealInterval)
+            guard !shuttingDown, !recovering, let engine else { continue }
+            switch await engine.state() {
+            case .running, .frozen: break
+            default: continue
+            }
+            n += 1
+            let report = await HealthService.check(ctx: ctx, config: config, engine: engine, deep: n % 6 == 0)
+            lastHealth = report
+            let eval = HealthEvaluation(verdict: report.verdict, reason: report.reason, fault: report.fault)
+            let history = HealthHistory(paths: ctx.paths, instance: id.rawValue)
+            let wasBad = healState.consecutiveBad > 0
+            switch healState.observe(eval, farmDevice: false, now: Date(), policy: SelfHealPolicy()) {
+            case .none:
+                if (report.verdict == .hung || report.verdict == .dead || report.verdict == .degraded) && !wasBad {
+                    history.append(HealthHistoryEntry(at: Date(), kind: "detect", verdict: report.verdict, reason: report.reason))
+                    echo("[\(Fmt.time(Date()))] health \(report.verdict.rawValue): \(report.reason)")
+                }
+            case .heal(let step, let reason):
+                await recover(step, reason: reason)
+            case .giveUp(let reason):
+                history.append(HealthHistoryEntry(at: Date(), kind: "give-up", verdict: report.verdict, reason: reason))
+                echo("[\(Fmt.time(Date()))] self-healing gave up: \(reason). Fix it with `emuu heal \(id)` or `emuu reboot \(id) --cold`.")
+            }
+            writeStatus()
+        }
+    }
+
+    private func recover(_ step: HealStep, reason: String) async {
+        guard let engine, !recovering else { return }
+        recovering = true
+        defer { recovering = false }
+        hangsDetected += 1
+        let history = HealthHistory(paths: ctx.paths, instance: id.rawValue)
+        history.append(HealthHistoryEntry(at: Date(), kind: "heal", reason: reason, step: step))
+        echo("[\(Fmt.time(Date()))] self-heal: \(reason) → \(step.rawValue)")
+        let t0 = ContinuousClock.now
+        var err: String?
+        do { try await HealthService.perform(step, ctx: ctx, engine: engine) } catch { err = describe(error) }
+        let after = await HealthService.waitHealthy(ctx: ctx, config: config, engine: engine, seconds: err == nil ? 120 : 5)
+        lastHealth = after
+        let ms = Int((ContinuousClock.now - t0).timeInterval * 1000)
+        let ok = err == nil && after.verdict == .healthy
+        healState.recordOutcome(success: ok)
+        if ok { recoveries += 1 }
+        history.append(HealthHistoryEntry(at: Date(), kind: ok ? "recovered" : "heal-failed", verdict: after.verdict,
+                                          reason: err ?? after.reason, step: step, millis: ms))
+        echo("[\(Fmt.time(Date()))] self-heal: \(step.rawValue) \(ok ? "recovered" : "did not fix it") in \(ms) ms (\(err ?? after.reason))")
+        if let serial = await engine.serial() { shell?.follow(serial) }
+        bundle?.governor.nudge()
+        writeStatus()
     }
 
     // MARK: control requests
@@ -377,6 +463,28 @@ actor Supervisor {
                 guard let bundle else { return .failure("governor is off (--no-governor)") }
                 let reports = await ManualTiers.reclaim(guest: bundle.guest, engine: bundle.engineEffector)
                 return ControlReply(ok: true, reports: reports)
+            case .health:
+                let report = await HealthService.check(ctx: ctx, config: config, engine: engine, deep: true)
+                return ControlReply(ok: true, message: try JSONText.encode(report))
+            case .reboot:
+                guard let mode = request.rebootMode.flatMap(RebootMode.init(rawValue:)) else { return .failure("reboot needs mode soft|hard|cold") }
+                guard !recovering else { return .failure("a recovery is already running") }
+                recovering = true
+                defer { recovering = false }
+                HealthHistory(paths: ctx.paths, instance: id.rawValue).append(HealthHistoryEntry(at: Date(), kind: "reboot", reason: "\(mode.rawValue) by request", step: mode.step))
+                try await HealthService.perform(mode.step, ctx: ctx, engine: engine)
+                if let serial = await engine.serial() { shell?.follow(serial) }
+            case .heal:
+                guard !recovering else { return .failure("a recovery is already running") }
+                recovering = true
+                defer { recovering = false }
+                healState.resetBreaker()
+                let result = await HealthService.heal(ctx: ctx, config: config, engine: engine, waitSeconds: 180)
+                if let serial = await engine.serial() { shell?.follow(serial) }
+                if !result.steps.isEmpty { hangsDetected += 1 }
+                if result.healed && !result.steps.isEmpty { recoveries += 1 }
+                lastHealth = result.after
+                return ControlReply(ok: true, message: try JSONText.encode(result))
             case .events:
                 let since = request.since ?? 0
                 await refreshCaches()

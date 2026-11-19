@@ -105,6 +105,8 @@ With exactly one instance you can leave out the name. Otherwise use `-i <name>`,
 | `logs` | Engine log (default), `--supervisor`, `--app`, or `--samples` (the governor's CSV); `-f` follows. |
 | `mem` | Live governor view (`--json`, `--once`, `--apps` for a per-app breakdown). `mem trim [--kill] [--level …]`, `mem reclaim`. |
 | `bench` | Cold boot, hibernate and resume times, plus idle footprint with and without the governor, as a Markdown table. |
+| `health`, `heal`, `reboot` | Health check, automatic recovery, soft/hard/cold reboot (see [Self-healing](#self-healing)). |
+| `golden`, `clone`, `farm`, `run` | Automation farm (see [Automation farm](#automation-farm)). |
 
 Device commands wake the instance first: a frozen engine is thawed and a hibernated one resumed.
 
@@ -252,6 +254,200 @@ activity (no idle freeze while it lasts). That is a heuristic — a runner that 
 gets frozen — so use automation mode for CI and long scripted runs. `scripts/automation-soak.sh` is the soak
 test used to check this (results in `docs/evidence/automation-soak-*.txt`).
 
+## Automation farm
+
+Emuu can run a small device farm for automated tests on one Mac: devices are **APFS clones** of a prepared
+**golden image** that resume from its quick-boot snapshot, so a fresh device is adb-ready in about 2 seconds and
+costs only the disk blocks it changes. A pool daemon keeps devices warm, leases them to test runs and resets them
+to the golden state afterwards.
+
+### Quick start
+
+```sh
+emuu golden create base --seal          # once: farm profile, animations off, sealed after 120 s of uptime (~2.5 min)
+#   or set it up first: `emuu golden create base`, install apps / sign in, then `emuu golden seal base [--lean]`
+emuu farm up --size auto                # daemon keeps N warm devices (N from RAM, cores and ports; see Limits)
+L=$(emuu farm acquire --wait --json)    # {"leaseID": "L-…", "serial": "emulator-5554", "instance": "farm-default-1", …}
+adb -s emulator-5554 install app.apk …  # drive it over adb
+emuu farm release L-…                   # back to the golden state (snapshot load in the running engine)
+emuu farm status [--json]               # devices, leases, counters, recent events
+emuu farm down                          # destroys every device
+```
+
+Or let Emuu do the lease handling around one command:
+
+```sh
+emuu run --apk app.apk --artifacts out/ -- ./gradlew connectedAndroidTest
+```
+
+`emuu run` uses a device from a running pool of that golden (otherwise a new clone it destroys afterwards;
+`--ephemeral` forces that), sets `ANDROID_SERIAL`, `EMUU_SERIAL`, `EMUU_INSTANCE` (and `EMUU_LEASE`), returns the
+command's exit status and gives the device back. `--timeout s` (exit 124), `--keep-on-failure` (keeps the
+device and prints how to reach it), `--artifacts dir` (on failure: `logcat.txt`, `screenshot.png`,
+`health.json`, and `screenrecord.mp4` with `--record`). Exit 69: no device; 75: the device was lost (hung or
+dead) during the run. SIGINT/SIGTERM are forwarded to the command's process group and the device is still
+returned; if the runner itself is killed, its lease ends with it (holder pid) and `emuu farm gc` removes an
+orphaned ephemeral clone.
+
+### Commands
+
+| Command | What it does |
+| --- | --- |
+| `golden create <name> [--from <instance>] [--ram MB] [--cores n] [--gpu mode] [--image tag] [--lean] [--seal]` | New golden instance (farm profile) booted headless; `--from` copies a stopped instance's disks (read only). |
+| `golden seal <name> [--lean] [--no-prep]` | Farm settings (animations off, no adb-install verification, stay awake), optional `pm disable-user` of 26 preinstalled apps tests rarely need (`--lean`, experimental: saves only ≈ 0.1 GB, and one benchmark run had unexplained command failures — see BENCHMARKS.md; Play Store/Play services/Chrome/WebView stay), waits for 120 s of uptime, records the guest boot id and saves the snapshot. |
+| `golden list`, `golden delete <name> -y` | |
+| `clone <golden> <name>` | A persistent instance from a golden (resumes its state, then keeps its own). |
+| `farm up [--pool p] [--golden g] [--size N\|auto] [--override-capacity] [--release-mode reset\|recycle] [--heal-leased replace\|restart\|report] [--ttl s] [--freeze-idle s] [--no-self-heal]` | Start or resize a pool. |
+| `farm acquire [--wait] [--timeout s] [--ttl s] [--holder-pid pid] [--json]` | Lease a ready device that just passed a health check. Exit 69 when none. |
+| `farm release <lease> [--reset\|--recycle] [--wait]` | End a lease; the device is reset (default) or replaced by a fresh clone. |
+| `farm heartbeat <lease> [--ttl s]` | Extend a lease (exit 75 when its device was lost). |
+| `farm status [--json]`, `farm capacity [--json]`, `farm down`, `farm gc` | |
+| `run [--golden g] [--pool p] [--ephemeral] [--apk x.apk …] [--timeout s] [--keep-on-failure] [--artifacts dir] [--record] -- cmd …` | One command on a fresh device. |
+
+Idle warm devices are frozen (SIGSTOP, 0 % CPU) after 60 s without a lease and thawed by `acquire` (measured:
+SIGCONT + health check 0.07–0.18 s, adb answers at once; an idle device otherwise used 47–113 % of a core right
+after its resume). `--freeze-idle 0` turns this off. Leased devices are never frozen.
+
+Leases end on `release`, when their TTL (default 30 min) passes without a `heartbeat`, or when the
+`--holder-pid` process exits (`emuu run` always sets itself). Two `acquire` calls never get the same device: the
+pool state is changed under an exclusive file lock. Ports are picked automatically among console ports
+5554–5584 (adb's emulator scan range), skipping any port another emulator (Emuu or not) is using.
+
+**Reset vs recycle.** Release resets by loading the golden snapshot into the running engine (console
+`avd snapshot load`): RAM *and* disks go back to the golden state (an installed app, files in `/sdcard` and
+`/data/local/tmp` and changed settings are gone, verified). Recycle kills the engine, re-clones and resumes.
+Both are verified with a health check and a second one 3 s later (same guest boot id as the golden) before the
+device is offered again. Measured times are in docs/BENCHMARKS.md ("Farm").
+
+### JSON output (format version 1)
+
+* `farm acquire --json`: `{"leaseID", "pool", "instance", "serial", "consolePort", "adbPort", "holderPID",
+  "acquiredAt", "expiresAt", "ttlSeconds"}`.
+* `farm status --json`: `{"formatVersion": 1, "pools": [{"daemonAlive", "capacity": CapacityReport, "state": FarmState}]}`.
+  `FarmState`: `pool, golden, size, daemonPID, createdAt, updatedAt, policy{releaseMode, healLeased, defaultTTL,
+  freezeIdleAfter, overrideCapacity, selfHeal}, devices[], leases[], counters{acquires, releases, resets,
+  resetFailures, recycles, replacements, leasesExpired, hangsDetected, recoveries, rebootsDetected}, history[]
+  (last 300 events: at, kind, device, lease, detail), stopRequested, capacityNote`. A device:
+  `instance, serial, consolePort, state (starting|ready|frozen|leased|resetting|unhealthy|replacing|failed),
+  enginePID, leaseID, since, resets, replacements, failedRecoveries, lastHealth{verdict, reason, at},
+  recycleNext, note`. A lease: `id, device, serial, holderPID, acquiredAt, expiresAt, ttlSeconds,
+  state (active|device_lost), lostReason`.
+* `farm capacity --json`: `CapacityReport{ceiling, byMemory, byCPU, byPorts, limitedBy, reserveBytes,
+  perDeviceBytes, physicalMemoryBytes, cpuCores, coresPerDevice, admitNow, admitReason, availableBytes, pressure}`.
+* `health --json`: `{instance, serial, verdict, reason, fault, checkedAt, probes[{name, status, detail, millis}],
+  bootID, suggestedStep}`; `heal --json` adds `before`, `steps[{step, ok, millis, error, after}]`, `after`, `healed`.
+
+Field names are stable; new fields may be added.
+
+### Examples
+
+Shell script:
+
+```sh
+read -r LEASE SERIAL _ < <(emuu farm acquire --wait --timeout 600)
+trap 'emuu farm release "$LEASE"' EXIT
+adb -s "$SERIAL" install -r app.apk && adb -s "$SERIAL" shell am instrument -w com.example.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+pytest + Appium (UiAutomator2) — `emuu run` exports `ANDROID_SERIAL`:
+
+```python
+# conftest.py
+import os, pytest
+from appium import webdriver
+from appium.options.android import UiAutomator2Options
+
+@pytest.fixture
+def driver():
+    opts = UiAutomator2Options().load_capabilities({"udid": os.environ["ANDROID_SERIAL"], "app": "app.apk"})
+    d = webdriver.Remote("http://127.0.0.1:4723", options=opts)
+    yield d
+    d.quit()
+```
+
+```sh
+emuu run --artifacts out/ -- pytest -q tests/
+```
+
+Maestro: `emuu run -- sh -c 'maestro --device "$ANDROID_SERIAL" test flows/'`.
+
+GitHub Actions on a self-hosted macOS runner (the pool stays up between jobs):
+
+```yaml
+jobs:
+  ui-tests:
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./gradlew assembleDebug assembleAndroidTest
+      - run: emuu farm status --json >/dev/null 2>&1 || emuu farm up --golden base --size auto
+      - run: emuu run --timeout 1800 --artifacts artifacts/ -- ./gradlew connectedDebugAndroidTest
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: device-artifacts, path: artifacts/ }
+```
+
+### Limits and capacity
+
+* **How many devices.** `emuu farm capacity` (and `emuu doctor`) compute it for the current host:
+  `min(⌊(RAM − reserve) ÷ per-device memory⌋, ⌊cores ÷ vCPUs per device⌋, 16)`, with
+  reserve = max(8 GiB, 40 % of RAM) for macOS and your own apps, and per-device memory = guest RAM + ~850 MiB
+  engine overhead (measured). On a 16 GB Mac that is **2 devices** of the default profile. `--size auto` uses
+  it; a bigger `--size` needs `--override-capacity`. A new device additionally waits while macOS memory
+  pressure is not normal or less than one device plus 10 % of RAM is available. Estimates for 24–48 GB Macs are
+  in docs/BENCHMARKS.md (estimates, not measurements).
+* **16 devices per Mac at most:** adb only discovers emulators on console ports 5554–5584. Emuu does not use
+  `adb connect` to go beyond that.
+* **Activity Monitor shows about 4.7–5.1 GB per device** (2048 MB guest). That number counts the guest RAM twice
+  (the QEMU mapping and the Hypervisor.framework mapping of the same pages); the real cost (`footprint`, and the
+  rise of the Mac's used memory) is 2.8–3.1 GB (+0.1 GB over 23 minutes and ~40 resets in the soak).
+* **Disk:** a golden image is ~3–4 GB (userdata + a ~1 GB RAM snapshot); a clone shares all of it and only
+  grows by what the device writes: 84 MiB for two fresh devices, ≈ 0.3 GB per device after a 35-minute soak
+  (BENCHMARKS.md). The volume must be APFS (`emuu doctor` checks).
+* **Identity:** clones share the golden's Android ID (`settings get secure android_id`), boot id and the
+  emulator's fixed serial number; adb serials and ports differ. A non-root Play image offers no way to change
+  these from the shell. A Google account signed in on the golden is signed in on every clone.
+* **Headless:** farm devices run without a window. Their gRPC display service is on (an idle listener costs
+  nothing measurable), so `emuu screenshot -i farm-default-1` works and the app could show them.
+
+## Self-healing
+
+`emuu health <instance> [--deep] [--json] [--history]` runs layered probes, each with its own timeout and
+reported separately:
+
+| Probe | Detects |
+| --- | --- |
+| process | engine gone (→ dead), SIGSTOPped by someone other than Emuu (→ hung; Emuu's own freeze → `frozen`) |
+| console | engine main loop not answering `ping` within 3 s |
+| adb | transport `offline`, `unauthorized` or missing |
+| shell | one `adb shell` round trip within 10 s: `sys.boot_completed`, guest `boot_id` (unexpected reboot), uptime, `/data` free (< 256 MiB → degraded) |
+| framework | a system_server binder call (`cmd package resolve-activity`) within 15 s (framework deadlock while the shell still works) |
+| ui (`--deep`) | an "isn't responding" / "keeps stopping" system dialog in front |
+
+Verdicts: healthy, degraded, hung, dead (plus frozen/stopped). Exit status 0/1/2/3/4.
+
+Recovery, smallest step first:
+
+* `emuu reboot <instance> [--soft|--hard|--cold] [--wait] [--json]`: soft = `adb reboot` (engine keeps
+  running); hard = engine stopped (console kill → SIGTERM → SIGKILL) and started from the quick-boot snapshot;
+  cold = engine restarted with a cold boot (snapshot discarded).
+* `emuu heal <instance> [--wait] [--json]`: checks, confirms the fault 3 s later (a dropped adb transport comes
+  back by itself), then walks the ladder for that fault: thaw (externally SIGSTOPped engine) → reconnect adb →
+  soft reboot (framework hang) → hard restart → cold boot. Farm devices: reset to the golden snapshot → fresh
+  clone (done by the pool daemon).
+* `emuu start --self-heal` (saved per instance): the supervisor checks every 20 s (deep probe every 6th time),
+  acts only after two bad checks in a row (a dead engine at once), backs off exponentially between attempts,
+  and stops after 3 failed recoveries in 30 minutes (status shows `selfHeal.failed`; `emuu heal` resets it).
+  It never acts while Emuu itself froze or hibernated the instance, or while the engine is booting.
+* **Farm pools self-heal by default** (`--no-self-heal` to turn off): idle devices are checked every 15 s and
+  healed (reset, else replaced); a device must pass a fresh check before `acquire` hands it out. A **leased**
+  device that fails two checks in a row is handled per `--heal-leased`: `replace` (default) marks the lease
+  `device_lost` (`farm status`, `farm heartbeat` exit 75, `emuu run` exit 75) and frees the engine; a fresh clone
+  takes its place once the lease is released or expires. `restart` heals it in place, `report` only marks the lease.
+
+Every detection and recovery is logged with time, reason, step and duration: `emuu health <instance> --history`
+(last 200, `logs/health-<id>.jsonl`) and `emuu farm status` (pool history and counters).
+
 ## Play Store sign-in
 
 Sign in **on the device**, the same way as on a phone: `emuu playstore --sign-in` opens the Google account
@@ -269,6 +465,10 @@ its prompts. `emuu playstore --status-only` shows whether an account is signed i
 ~/.emuu/cache/               temporary install extraction (an old cache/scrcpy/ from earlier versions can be deleted)
 ~/.emuu/screenshots/         app screenshots
 ~/.emuu/recordings/          app screen recordings (MP4)
+~/.emuu/farm/goldens/        sealed golden images (<name>.json; the instance itself is in avd/)
+~/.emuu/farm/pools/<pool>/   pool state.json (+ lock), daemon.lock, daemon.log
+~/.emuu/farm/ephemeral/      owners of `emuu run` clones (for `farm gc`)
+~/.emuu/logs/health-<id>.jsonl  health detections and recoveries
 ```
 
 Unified logging: `log stream --predicate 'subsystem == "dev.emuu"'`.

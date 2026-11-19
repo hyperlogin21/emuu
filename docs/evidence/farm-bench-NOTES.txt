@@ -1,0 +1,16 @@
+Notes on the farm-bench-*.txt runs (scripts/farm-bench.sh, 2026-11-19, one Mac, user apps running)
+
+std2048     clean. Predates the "real" (footprint -p) column; footprint -p read by hand at minute ~9: 2858 / 2854 MB.
+r1536       a third engine (golden `base` being created) booted during the last ~2 minutes of the loop (pressure warn once).
+r1024       my fault-injection tests ran one extra engine (instance fx) from 10:08 to 10:15 during this run.
+lean1536    INVALID: scripts/farm-workload.sh was edited while this run's workloads were executing, bash re-read the
+            changed file ("line 58: `done'"); no throughput line. Kept for completeness only.
+lean1536b   the workload's new abort rule (2 consecutive failures) ended both loops early: at 11:04:33 and 11:04:45 both
+            devices failed `input swipe` then `uiautomator dump` (fast failures, not timeouts; adb server not restarted).
+            Cause not found: a 4-minute rerun on a single lean clone (golden `leanx`, 1536 MB, --lean) had 0 failures in
+            871 commands at 16.8 iterations/min and no crash/ANR in logcat or dropbox. Not enough evidence either way; lean
+            is not the default.
+r1536b      repeat of r1536 (clean of the golden overlap); my lean investigation ran a third engine 11:06–11:13.
+sw1536      clean. Engine CPU sampled by hand (farm-bench-cpu-samples.txt).
+c1-1536     my farm `emuu run` device-lost test ran a third engine 10:46–10:48 (during this run's golden boot only).
+CPU samples: top -l 2 -s 5 -pid <engine> (% of one core).

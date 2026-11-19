@@ -211,11 +211,27 @@ public struct InstanceConfig: Codable, Sendable, Hashable {
     public var automationMode: Bool?
     /// Show Android's on-screen keyboard for focused text fields. nil (older configs) = on.
     public var showSoftKeyboard: Bool?
+    /// Run the guest with exactly `ramMB` (engine 36.4.9 raises `-memory` below 2048 MB to 2048 for android-36.1;
+    /// Emuu then also passes `-qemu -m <ramMB>`, which the engine's QEMU honours: measured MemTotal 990852 kB for
+    /// 1024). nil (older configs) = off, so existing instances and their quick-boot snapshots keep 2048 MB.
+    public var guestRAMEnforced: Bool?
+    /// Self-healing: the supervisor runs periodic health checks and recovers a hung engine/guest automatically
+    /// (see docs/ARCHITECTURE.md, "Self-healing"). nil = off for interactive instances.
+    public var selfHeal: Bool?
+    /// Golden image this instance was cloned from (farm devices, `emuu clone`), nil otherwise.
+    public var goldenSource: String?
+    /// Quick-boot snapshot is never saved on exit (`-no-snapshot-save`): farm clones always resume from the golden
+    /// state. nil = off.
+    public var discardStateOnExit: Bool?
 
     /// `automationMode` with its default applied.
     public var isAutomationMode: Bool { automationMode ?? false }
     /// `showSoftKeyboard` with its default applied.
     public var softKeyboardEnabled: Bool { showSoftKeyboard ?? true }
+    /// `guestRAMEnforced` with its default applied.
+    public var isGuestRAMEnforced: Bool { guestRAMEnforced ?? false }
+    /// `selfHeal` with its default applied.
+    public var isSelfHealing: Bool { selfHeal ?? false }
 
     public init(
         id: InstanceID,

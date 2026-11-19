@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import EmuuBase
 
@@ -145,7 +146,9 @@ public final class InstanceStore: Sendable {
             guard !isRunning(id) else { throw EmuuError.invalidStateTransition(from: .running, action: "delete") }
             let fm = FileManager.default
             for url in [paths.avdDirectory(for: id), paths.avdIniFile(for: id), paths.instanceConfigFile(for: id),
-                        paths.pidFile(for: id), HibernationMarker.url(for: id, paths: paths)] where fm.fileExists(atPath: url.path) {
+                        paths.pidFile(for: id), HibernationMarker.url(for: id, paths: paths), FreezeMarker.url(for: id, paths: paths),
+                        CrashMarker.url(for: id, paths: paths),
+                        paths.runDirectory.appendingPathComponent("\(id.rawValue).bootid")] where fm.fileExists(atPath: url.path) {
                 do { try fm.removeItem(at: url) } catch {
                     throw EmuuError.io(path: url.path, message: error.localizedDescription)
                 }
@@ -154,13 +157,18 @@ public final class InstanceStore: Sendable {
         }
     }
 
-    /// Copies `source` to a new instance `target`. The userdata overlays are copied with APFS clones
-    /// (`FileManager.copyItem` uses clonefile), so this is fast and initially takes no extra disk space.
-    /// Snapshots are not copied unless `includeSnapshots` (quick-boot RAM files are large and embed the
-    /// source's identity). Refuses while the source runs (copying live qcow2 files corrupts them).
+    /// Copies `source` to a new instance `target` with APFS clones (`clonefile(2)`: instant, and no extra disk until
+    /// either side writes). Refuses while the source runs (copying live qcow2 files corrupts them).
+    ///
+    /// With `includeSnapshots` the quick-boot snapshot comes along, so the clone resumes the source's exact state.
+    /// The engine refuses a snapshot whose `hardware.ini` does not match the launch ("The emulator hardware cannot
+    /// load snapshot", measured on 36.4.9 when the disk paths and `avd.name` still named the source), so each
+    /// `snapshots/*/hardware.ini` is rewritten for the target. `snapshot.pb` also embeds the source's absolute disk
+    /// paths, but the engine does not check them (verified: the clone loads `default_boot` and its writes go to its
+    /// own files). Per-launch files (`perLaunchArtifacts`) are not copied.
     @discardableResult
     public func clone(_ source: InstanceID, to target: InstanceID, displayName: String? = nil,
-                      includeSnapshots: Bool = false) throws -> InstanceConfig {
+                      includeSnapshots: Bool = false, configure: (inout InstanceConfig) -> Void = { _ in }) throws -> InstanceConfig {
         try lock.withLock { _ in
             var config = try load(source)
             guard !exists(target) else { throw EmuuError.instanceAlreadyExists(target) }
@@ -171,16 +179,31 @@ public final class InstanceStore: Sendable {
             do {
                 try fm.createDirectory(at: dstDir, withIntermediateDirectories: true)
                 for item in try fm.contentsOfDirectory(atPath: srcDir.path) {
-                    if Self.perLaunchArtifacts.contains(item) || item == "config.ini" { continue }
+                    if Self.perLaunchArtifacts.contains(item) || item.hasSuffix(".lock") || item == "config.ini" { continue }
                     if item == "snapshots" && !includeSnapshots { continue }
-                    try fm.copyItem(at: srcDir.appendingPathComponent(item), to: dstDir.appendingPathComponent(item))
+                    try Self.cloneItem(srcDir.appendingPathComponent(item), to: dstDir.appendingPathComponent(item))
+                }
+                if includeSnapshots {
+                    try Self.rewriteSnapshotHardware(in: dstDir.appendingPathComponent("snapshots"),
+                                                     fromAVD: srcDir.standardizedFileURL.path, toAVD: dstDir.standardizedFileURL.path,
+                                                     newID: target.rawValue)
                 }
                 config.id = target
                 config.displayName = displayName ?? target.rawValue
                 config.ports = nil
                 config.createdAt = Self.wholeSeconds(Date())
+                configure(&config)
+                config.id = target
                 let tagDisplay = try checkImage(config.systemImage)
                 try writeAVDFiles(config, tagDisplay: tagDisplay)
+                if includeSnapshots, var ini = try? IniFile(contentsOf: srcDir.appendingPathComponent("config.ini")) {
+                    // The snapshot only loads when the hardware matches what the source last ran with. The engine
+                    // rewrites config.ini on first boot (measured: `disk.dataPartition.size` 4096M → 6442450944 for
+                    // android-36.1), so keep the source's file and change only the identity keys.
+                    ini["AvdId"] = target.rawValue
+                    ini["avd.ini.displayname"] = config.displayName
+                    try ini.write(to: dstDir.appendingPathComponent("config.ini"))
+                }
                 try Self.encode(config, to: paths.instanceConfigFile(for: target))
             } catch {
                 try? fm.removeItem(at: dstDir)
@@ -189,9 +212,51 @@ public final class InstanceStore: Sendable {
                 if let e = error as? EmuuError { throw e }
                 throw EmuuError.io(path: dstDir.path, message: error.localizedDescription)
             }
-            log.notice("cloned \(source) -> \(target)")
+            log.notice("cloned \(source) -> \(target)\(includeSnapshots ? " (with snapshots)" : "")")
             return config
         }
+    }
+
+    /// `clonefile(2)` (copy-on-write, recursive for directories); falls back to a byte copy on volumes without
+    /// clone support (non-APFS), which is slow and uses full disk space.
+    static func cloneItem(_ src: URL, to dst: URL) throws {
+        if Darwin.clonefile(src.path, dst.path, 0) == 0 { return }
+        let err = errno
+        guard err == ENOTSUP || err == EXDEV else {
+            throw EmuuError.io(path: dst.path, message: "clonefile: \(String(cString: strerror(err)))")
+        }
+        try FileManager.default.copyItem(at: src, to: dst)
+    }
+
+    /// True when `directory`'s volume supports APFS clones (`VOL_CAP_INT_CLONE`).
+    public static func supportsClones(at directory: URL) -> Bool {
+        (try? directory.resourceValues(forKeys: [.volumeSupportsFileCloningKey]).volumeSupportsFileCloning) == true
+    }
+
+    static func rewriteSnapshotHardware(in snapshots: URL, fromAVD: String, toAVD: String, newID: String) throws {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: snapshots.path) else { return }
+        for name in names {
+            let ini = snapshots.appendingPathComponent(name).appendingPathComponent("hardware.ini")
+            guard let text = try? String(contentsOf: ini, encoding: .utf8) else { continue }
+            let rewritten = rewriteHardwareIni(text, fromAVD: fromAVD, toAVD: toAVD, newID: newID)
+            // Replace (not overwrite in place): the file is a clone shared with the source.
+            try? fm.removeItem(at: ini)
+            try Data(rewritten.utf8).write(to: ini, options: .atomic)
+        }
+    }
+
+    /// Rewrites a snapshot's `hardware.ini` for a cloned AVD: paths under the source AVD directory and
+    /// `avd.name`/`avd.id` (pure; unit-tested).
+    public static func rewriteHardwareIni(_ text: String, fromAVD: String, toAVD: String, newID: String) -> String {
+        let from = fromAVD.hasSuffix("/") ? fromAVD : fromAVD + "/"
+        let to = toAVD.hasSuffix("/") ? toAVD : toAVD + "/"
+        return text.split(separator: "\n", omittingEmptySubsequences: false).map { raw -> String in
+            let line = String(raw)
+            let key = line.split(separator: "=", maxSplits: 1).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+            if key == "avd.name" || key == "avd.id" { return "\(key) = \(newID)" }
+            return line.replacingOccurrences(of: from, with: to)
+        }.joined(separator: "\n")
     }
 
     // MARK: Helpers
@@ -261,6 +326,49 @@ public enum HibernationMarker {
         } catch {
             throw EmuuError.io(path: url.path, message: error.localizedDescription)
         }
+    }
+
+    public static func clear(for id: InstanceID, paths: EmuuPaths) {
+        try? FileManager.default.removeItem(at: url(for: id, paths: paths))
+    }
+}
+
+/// `run/<id>.frozen`: present while Emuu itself has frozen the engine (T4, `emuu freeze`). A SIGSTOPped engine
+/// *without* this marker was stopped by someone else (or is wedged), which the health check reports as hung.
+public enum FreezeMarker {
+    public static func url(for id: InstanceID, paths: EmuuPaths) -> URL {
+        paths.runDirectory.appendingPathComponent("\(id.rawValue).frozen")
+    }
+
+    public static func isSet(for id: InstanceID, paths: EmuuPaths) -> Bool {
+        FileManager.default.fileExists(atPath: url(for: id, paths: paths).path)
+    }
+
+    public static func set(for id: InstanceID, paths: EmuuPaths) {
+        try? FileManager.default.createDirectory(at: paths.runDirectory, withIntermediateDirectories: true)
+        try? Data().write(to: url(for: id, paths: paths))
+    }
+
+    public static func clear(for id: InstanceID, paths: EmuuPaths) {
+        try? FileManager.default.removeItem(at: url(for: id, paths: paths))
+    }
+}
+
+/// `run/<id>.crashed`: the engine exited without a clean stop (crash, SIGKILL from outside). Holds the reason.
+/// Written by whichever Emuu process watched the engine die, cleared by the next successful start, so a later
+/// `emuu health` in another process can still report the instance as dead rather than merely stopped.
+public enum CrashMarker {
+    public static func url(for id: InstanceID, paths: EmuuPaths) -> URL {
+        paths.runDirectory.appendingPathComponent("\(id.rawValue).crashed")
+    }
+
+    public static func reason(for id: InstanceID, paths: EmuuPaths) -> String? {
+        try? String(contentsOf: url(for: id, paths: paths), encoding: .utf8)
+    }
+
+    public static func set(for id: InstanceID, paths: EmuuPaths, reason: String) {
+        try? FileManager.default.createDirectory(at: paths.runDirectory, withIntermediateDirectories: true)
+        try? Data(reason.utf8).write(to: url(for: id, paths: paths), options: .atomic)
     }
 
     public static func clear(for id: InstanceID, paths: EmuuPaths) {

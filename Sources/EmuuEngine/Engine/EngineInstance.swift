@@ -167,8 +167,8 @@ public actor EngineInstance: EngineControl {
         try paths.ensureDirectories()
         let logURL = paths.engineLogFile(for: instanceID)
         Self.rotateLogIfLarge(logURL)
-        let grpc = PortAllocator.grpcPort(for: chosen, isFree: deps.isPortFree)
-        if grpc == nil { log.warning("no free gRPC port in 8554…8999: the display needs one (engine starts without it)") }
+        let grpc = options.grpc ? PortAllocator.grpcPort(for: chosen, isFree: deps.isPortFree) : nil
+        if options.grpc, grpc == nil { log.warning("no free gRPC port in 8554…8999: the display needs one (engine starts without it)") }
         let args = EngineCommandLine.arguments(for: config, ports: chosen, grpcPort: grpc, options: options)
         Self.appendLogHeader(logURL, "emuu launch \(ISO8601DateFormatter().string(from: deps.clock.now())): emulator \(args.joined(separator: " "))")
         let request = ProcessRequest(executable: sdk.emulator, arguments: args,
@@ -202,6 +202,7 @@ public actor EngineInstance: EngineControl {
             throw error
         }
         HibernationMarker.clear(for: instanceID, paths: paths)
+        CrashMarker.clear(for: instanceID, paths: paths)
     }
 
     /// Polls `adb shell getprop sys.boot_completed` until it reads 1.
@@ -253,6 +254,7 @@ public actor EngineInstance: EngineControl {
             guard case .stopped = try await c.vmStatus() else { throw EmuuError.console("avd stop did not stop the VM") }
         }
         frozenBy = freezeMechanism
+        FreezeMarker.set(for: instanceID, paths: paths)
         setState(.frozen)
     }
 
@@ -275,6 +277,7 @@ public actor EngineInstance: EngineControl {
             if case .stopped = try await c.vmStatus() { try await c.avdStart() }
         }
         frozenBy = nil
+        FreezeMarker.clear(for: instanceID, paths: paths)
         setState(.running)
     }
 
@@ -292,6 +295,29 @@ public actor EngineInstance: EngineControl {
     public func loadSnapshot(named name: String) async throws {
         try requireRunning("load snapshot")
         try await consoleClient().snapshotLoad(name)
+    }
+
+    /// Farm reset: loads `default_boot` into the running engine (console `avd snapshot load`), which rolls RAM
+    /// *and* the qcow2 disks back to the snapshot, then waits until adb answers again (the transport drops for
+    /// a moment during the load). Measured on 36.4.9: an installed app, files in /sdcard and /data/local/tmp and a
+    /// changed setting were all gone afterwards.
+    public func resetToQuickBootSnapshot(timeout: Duration = .seconds(60)) async throws {
+        try requireRunning("reset to snapshot")
+        try await consoleClient().snapshotLoad("default_boot", timeout: timeout)
+        setState(.booting)
+        try await waitForBoot(timeout: timeout)
+    }
+
+    /// Guest-only reboot (`adb reboot`): the engine keeps running, Android restarts from its disks.
+    public func rebootGuest(timeout: Duration = .seconds(180)) async throws {
+        try requireRunning("reboot guest")
+        guard let serial = ports?.serial else { throw EmuuError.engine("no adb serial") }
+        let req = ProcessRequest(executable: sdk.adb, arguments: ["-s", serial.rawValue, "reboot"], timeout: .seconds(20))
+        _ = try await deps.runner.run(req)
+        setState(.booting)
+        // boot_completed still reads 1 for a moment while the old userspace shuts down.
+        try await deps.clock.sleep(for: .seconds(3))
+        try await waitForBoot(timeout: timeout)
     }
 
     public func deleteSnapshot(named name: String) async throws {
@@ -473,6 +499,7 @@ public actor EngineInstance: EngineControl {
                 throw EmuuError.engine("engine pid \(pid ?? -1) survived SIGKILL")
             }
             invalidateQuickBoot()
+            if let pid { Self.removeDiscoveryFile(pid: pid) }
             finishStopped()
         case .graceful(let save):
             if current == .frozen { try await thaw() }
@@ -512,6 +539,7 @@ public actor EngineInstance: EngineControl {
     }
 
     private func finishStopped() {
+        CrashMarker.clear(for: instanceID, paths: paths)
         clearRuntime()
         HibernationMarker.clear(for: instanceID, paths: paths)
         setState(.stopped)
@@ -534,6 +562,7 @@ public actor EngineInstance: EngineControl {
         frozenBy = nil
         if config.ports == nil { ports = nil }
         guard removeArtifacts else { return }
+        FreezeMarker.clear(for: instanceID, paths: paths)
         try? FileManager.default.removeItem(at: paths.pidFile(for: instanceID))
         // The engine leaves *.lock files behind even on a clean exit; remove them once it is gone.
         AVDLockProbe.staleLockArtifacts(in: paths.avdDirectory(for: instanceID)).forEach {
@@ -704,6 +733,7 @@ public actor EngineInstance: EngineControl {
         // The quick-boot snapshot is older than the disks now; loading it would roll userdata back.
         invalidateQuickBoot()
         clearRuntime()
+        CrashMarker.set(for: instanceID, paths: paths, reason: reason)
         setState(.crashed(reason: reason))
     }
 
@@ -759,10 +789,18 @@ public actor EngineInstance: EngineControl {
 
     public static let engineLogLimit: UInt64 = 8 * 1024 * 1024
 
+    /// A SIGKILLed engine cannot remove its discovery file
+    /// (`~/Library/Caches/TemporaryItems/avd/running/pid_<pid>.ini`, which holds its gRPC token); measured: farm
+    /// devices destroyed with SIGKILL left theirs behind. Only the file of the pid Emuu just killed is removed.
+    static func removeDiscoveryFile(pid: Int32, home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+        let url = home.appendingPathComponent("Library/Caches/TemporaryItems/avd/running/pid_\(pid).ini")
+        try? FileManager.default.removeItem(at: url)
+    }
+
     private func crashReason(_ termination: ProcessTermination?) -> String {
         var parts: [String] = [termination.map { "engine \($0)" } ?? "engine process disappeared"]
         let interesting = Self.tail(of: paths.engineLogFile(for: instanceID), bytes: 16 * 1024)
-            .filter { $0.contains("FATAL") || $0.contains("ERROR") || $0.contains("crash") }
+            .filter { ($0.contains("FATAL") || $0.contains("ERROR") || $0.contains("crash")) && !$0.hasPrefix("INFO") }
         if let last = interesting.last { parts.append(last.trimmingCharacters(in: .whitespaces)) }
         return parts.joined(separator: "; ")
     }

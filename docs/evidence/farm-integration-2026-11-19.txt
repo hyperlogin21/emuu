@@ -1,0 +1,66 @@
+Farm / self-healing integration checks, 2026-11-19, isolated EMUU_HOME (scratch), golden `base` (2048 MB, 2 vCPUs,
+host GPU), emulator 36.4.9, android-36.1 Play Store image. Commands and outputs copied from the terminal (trimmed).
+
+--- golden ---
+$ emuu golden create base --seal                      (2 min 08 s: cold boot, farm settings, 120 s uptime, seal)
+Golden base sealed (boot id 57187c81-3549-459f-b10f-2cccbbf8dbd6).
+$ emuu golden list
+base  2026-11-19T02:07:49Z  2048 MB  2  host  no  1.02 GiB  system-images;android-36.1;google_apis_playstore;arm64-v8a
+
+First clone attempt (before the fix) cold-booted: "ERROR | The emulator hardware cannot load snapshot: default_boot"
+(snapshot hardware.ini: disk.dataPartition.size = 6g, regenerated config.ini: 4g). After keeping the golden's
+config.ini: "Successfully loaded snapshot 'default_boot' using 562 ms"; `emuu start fx` returned in 2.37 s.
+
+--- pool, size 1 ---
+$ emuu farm up --golden base --size 1                 1 device(s) ready in 5.2 s (adb-ready 4.92 s incl. 3 s settle check)
+$ emuu farm acquire --json                            0.085 s (including the pre-lease health check)
+$ emuu farm acquire                                   emuu: no ready device in pool 'default' (1 device(s): 1 leased)   exit 69
+install test APK + write /sdcard/m.txt, then
+$ emuu farm release L-9ff52c5a --wait                 release->ready 4.59 s; afterwards: package gone, /sdcard/m.txt: No such file
+$ emuu farm release <lease> --recycle --wait  (×2)    release->ready 5.61 s, 5.18 s
+8 concurrent `emuu farm acquire` processes, 1 device: 1 lease (exit 0), 7 × exit 69.
+
+--- emuu run (pool mode) ---
+$ emuu run --apk emuu-securetest.apk -- sh -c 'echo "serial=$ANDROID_SERIAL inst=$EMUU_INSTANCE lease=$EMUU_LEASE"; adb shell pm list packages dev.emuu'
+emuu run: emulator-5554 (farm-default-1, lease L-e8d80685) ready in 0.1 s
+serial=emulator-5554 inst=farm-default-1 lease=L-e8d80685
+package:dev.emuu.securetest                            exit=0
+$ emuu run --artifacts art1 -- sh -c '...; exit 7'     exit=7; art1/: health.json, logcat.txt (11 MB), screenshot.png
+$ emuu run --timeout 3 -- sleep 30                     "--timeout 3 s expired; command killed"   exit=124
+SIGTERM to the runner (after the fix below): "got TERM" from the command's trap, exit=143, no `sleep` left, lease released
+SIGKILL to the runner: pool history "release farm-default-1 [L-65192991]: holder pid 87134 exited" 1 s later
+Bug found and fixed: forwarded SIGTERM never reached the command (kill(-pgid) rc=0, but the child inherited a
+blocked SIGTERM from the spawning Swift thread); fixed with POSIX_SPAWN_SETSIGMASK.
+
+--- emuu run (ephemeral) ---
+$ emuu run --ephemeral -- sh -c 'echo "$ANDROID_SERIAL $EMUU_INSTANCE"; adb shell getprop sys.boot_completed'
+emuu run: emulator-5556 (run-90702-10c1, ephemeral clone) ready in 1.9 s      total 2.5 s; no run-* instance left
+runner SIGKILLed during an ephemeral run, then:
+$ emuu farm gc                                         gc: 0 stale pool(s), 1 instance(s) destroyed: run-90853-dd49.   (engine gone, clone gone)
+
+--- device lost during `emuu run` ---
+SIGSTOP the leased engine 6 s into `emuu run -- sleep 120`:
+  10:46:51 suspect farm-default-1 [L-86ec0ccf]: hung: engine is SIGSTOPped but Emuu did not freeze it (confirming)
+  10:46:57 unhealthy / device_lost farm-default-1 [L-86ec0ccf]
+  emuu run: device lost during the run: engine is SIGSTOPped but Emuu did not freeze it      exit=75
+  10:48:06 recycled farm-default-1: adb-ready in 4.73 s
+  (the run took 79 s because artifact collection waited for the hung device; now skipped for lost devices)
+
+--- freeze idle ---
+idle ready device right after resume: 110.9 %, 113.2 %, 46.9 % CPU (top, 5 s samples); frozen: 0.0 %
+acquire from frozen (SIGCONT + health check): 0.18 s, 0.07 s, 0.07 s; `getprop sys.boot_completed` = 1 immediately
+
+--- health / heal / self-heal on instance fx (clone of base, with supervisor) ---
+external SIGSTOP:  emuu health fx → HUNG — engine is SIGSTOPped but Emuu did not freeze it (exit 2)
+                   emuu heal fx   → thaw: ok in 93 ms; now healthy
+am hang:           "Hanging the system..." but every probe kept answering (cmd activity, dumpsys, pm, input: < 1 s)
+am crash <system_server pid>: no effect (pid unchanged)
+adb disconnect emulator-5554: transport back within ~1 s by itself; `emuu heal` now confirms before acting
+kill -9 engine:    emuu health fx → DEAD — engine crashed: engine signal 9 (crash marker); emuu heal fx → hard-restart ok in 13.4 s
+self-heal (emuu start fx --self-heal):
+  external SIGSTOP 10:14:05 → [10:14:25] health hung → [10:14:46] self-heal → thaw → [10:14:47] recovered in 629 ms
+  kill -9 10:14:52 → [10:14:52] self-heal: engine crashed → hard-restart → [10:15:06] recovered in 14009 ms; supervisor stayed up
+
+--- other ---
+emuu screenshot -i farm-default-1 farm-shot.png → PNG 720 x 1600 (gRPC framebuffer of a farm device)
+emuu doctor: Farm: APFS clones ok; free disk 143 GiB; capacity 2 device(s) (limited by memory) on this 16 GB Mac

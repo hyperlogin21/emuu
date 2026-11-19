@@ -1,0 +1,88 @@
+11:18:50 lease L-e87a8197 emulator-5554
+emulator-5554 iterations=13 ok=169 failed=0 secs=46 iter_per_min=17.0 boot_id_changes=0 aborted=0
+11:19:43 lease L-9e9eeb44 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:20:33 lease L-52303be1 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:21:24 lease L-7805c597 emulator-5554
+emulator-5554 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:22:13 lease L-4f9ec86b emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:23:05 lease L-6e7c723d emulator-5554
+emulator-5554 iterations=13 ok=169 failed=0 secs=45 iter_per_min=17.3 boot_id_changes=0 aborted=0
+11:23:54 lease L-8ffba631 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=45 iter_per_min=17.3 boot_id_changes=0 aborted=0
+11:24:44 lease L-c96f0f97 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=45 iter_per_min=17.3 boot_id_changes=0 aborted=0
+11:25:37 lease L-0d60a419 emulator-5554
+emulator-5554 iterations=13 ok=169 failed=0 secs=48 iter_per_min=16.2 boot_id_changes=0 aborted=0
+11:26:26 lease L-e93d8c73 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:27:16 lease L-e45697ef emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:28:06 lease L-4c10038e emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:28:58 lease L-d6e20422 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=46 iter_per_min=17.0 boot_id_changes=0 aborted=0
+11:29:50 lease L-08f65b01 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:30:40 lease L-92bf9d37 emulator-5556
+  11:30:55 emulator-5556 FAIL: adb shell uiautomator dump /sdcard/emuu-ui.xml
+  11:30:55 emulator-5556 FAIL: adb exec-out screencap -p
+  11:30:55 emulator-5556 aborting: device not answering
+emulator-5556 iterations=4 ok=43 failed=2 secs=15 iter_per_min=16.0 boot_id_changes=0 aborted=1
+11:31:01 lease L-01b402fe emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:31:51 lease L-1d7b7611 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=46 iter_per_min=17.0 boot_id_changes=0 aborted=0
+11:32:42 lease L-385fb8ba emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=46 iter_per_min=17.0 boot_id_changes=0 aborted=0
+11:33:33 lease L-8a4dda82 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=46 iter_per_min=17.0 boot_id_changes=0 aborted=0
+11:34:24 lease L-b912ae66 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:35:16 lease L-1d9d7ca9 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:36:06 lease L-38576ae6 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:36:56 lease L-916fe298 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=46 iter_per_min=15.7 boot_id_changes=0 aborted=0
+11:37:47 lease L-3939089a emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:38:39 lease L-c2255f33 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:39:31 lease L-e20458f0 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:40:23 lease L-dde0e48d emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:41:15 lease L-0df56810 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=47 iter_per_min=15.3 boot_id_changes=0 aborted=0
+11:42:07 lease L-897d9d30 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:42:59 lease L-eca7b67b emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=47 iter_per_min=15.3 boot_id_changes=0 aborted=0
+11:43:55 lease L-bc5e12bd emulator-5554
+emulator-5554 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:44:47 lease L-de5db9db emulator-5554
+emulator-5554 iterations=13 ok=169 failed=0 secs=48 iter_per_min=16.2 boot_id_changes=0 aborted=0
+11:45:40 lease L-931a688b emulator-5554
+emulator-5554 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:46:26 lease L-bffc9574 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:47:18 lease L-2ea80f51 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:48:08 lease L-d12070a4 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=46 iter_per_min=15.7 boot_id_changes=0 aborted=0
+11:48:59 lease L-0b484fa9 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=46 iter_per_min=15.7 boot_id_changes=0 aborted=0
+11:49:49 lease L-8fc46701 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=46 iter_per_min=17.0 boot_id_changes=0 aborted=0
+11:50:41 lease L-760a7ff5 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=46 iter_per_min=17.0 boot_id_changes=0 aborted=0
+11:51:32 lease L-20519495 emulator-5556
+emulator-5556 iterations=13 ok=169 failed=0 secs=47 iter_per_min=16.6 boot_id_changes=0 aborted=0
+11:52:28 lease L-07d1358a emulator-5554
+emulator-5554 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:53:16 lease L-eab24760 emulator-5556
+emulator-5556 iterations=12 ok=156 failed=0 secs=45 iter_per_min=16.0 boot_id_changes=0 aborted=0
+11:54:01 worker 1 done: cycles=42 device_lost=0

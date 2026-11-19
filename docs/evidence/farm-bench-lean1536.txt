@@ -1,0 +1,48 @@
+== farm-bench lean1536: guest 1536 MB, 2 cores, gpu host, lean=1, loop 600s, 2026-11-19 10:19:40
+host before: nonfile=10011MiB compressor=3983MiB swap=5112.75M pressure=1 free=53%
+golden cold boot: 19.37 s
+lean: disabled 26 packages
+golden after settle: engine 3395M/real 1863MB, guest MemAvailable: 598388 kB
+clone a: 0.03 s
+clone b: 0.03 s
+clone disk: du (apparent sharing ignored) 3.0G; volume free 117Gi
+resume a: 1.51 s
+resume b: 1.51 s
+  INFO         | Loading snapshot 'default_boot'...
+  INFO         | Successfully loaded snapshot 'default_boot' using 799 ms
+  INFO         | Loading snapshot 'default_boot'...
+  INFO         | Successfully loaded snapshot 'default_boot' using 779 ms
+after boot+30s: engine a 3486M/real 2155MB b 3484M/real 2154MB; host nonfile=12265MiB compressor=3355MiB swap=5096.75M pressure=1 free=57%
+  t+30s engine a 3733M/real 2276MB b 3723M/real 2303MB; host nonfile=12472MiB compressor=3297MiB swap=5096.75M pressure=1 free=56%
+  t+60s engine a 3776M/real 2295MB b 3773M/real 2291MB; host nonfile=12322MiB compressor=3572MiB swap=5088.75M pressure=1 free=54%
+  t+90s engine a 3784M/real 2302MB b 3784M/real 2290MB; host nonfile=12373MiB compressor=3497MiB swap=5088.75M pressure=1 free=55%
+  t+120s engine a 3800M/real 2315MB b 3785M/real 2300MB; host nonfile=12454MiB compressor=3439MiB swap=5088.75M pressure=1 free=55%
+  t+150s engine a 3794M/real 2308MB b 3794M/real 2322MB; host nonfile=12634MiB compressor=3452MiB swap=5080.75M pressure=1 free=54%
+  t+180s engine a 3810M/real 2324MB b 3804M/real 2318MB; host nonfile=12530MiB compressor=3504MiB swap=5064.75M pressure=1 free=55%
+  t+210s engine a 3808M/real 2311MB b 3829M/real 2327MB; host nonfile=12478MiB compressor=3572MiB swap=5064.75M pressure=1 free=54%
+  t+240s engine a 3824M/real 2337MB b 3821M/real 2335MB; host nonfile=12521MiB compressor=3497MiB swap=5056.75M pressure=1 free=55%
+  t+270s engine a 3812M/real 2325MB b 3812M/real 2325MB; host nonfile=12555MiB compressor=3425MiB swap=5056.75M pressure=1 free=55%
+  t+300s engine a 3829M/real 2357MB b 3841M/real 2343MB; host nonfile=12422MiB compressor=3581MiB swap=5056.75M pressure=1 free=53%
+  t+330s engine a 3824M/real 2337MB b 3839M/real 2336MB; host nonfile=12521MiB compressor=3436MiB swap=5056.75M pressure=1 free=55%
+  t+360s engine a 3826M/real 2339MB b 3836M/real 2348MB; host nonfile=12565MiB compressor=3483MiB swap=5056.75M pressure=1 free=55%
+  t+390s engine a 3834M/real 2346MB b 3860M/real 2371MB; host nonfile=12615MiB compressor=3430MiB swap=5056.75M pressure=1 free=55%
+  t+420s engine a 3861M/real 2373MB b 3848M/real 2359MB; host nonfile=12598MiB compressor=3773MiB swap=5056.75M pressure=1 free=50%
+  t+450s engine a 3855M/real 2366MB b 3853M/real 2364MB; host nonfile=12587MiB compressor=3516MiB swap=5056.75M pressure=1 free=54%
+  t+480s engine a 3863M/real 2374MB b 3859M/real 2369MB; host nonfile=12604MiB compressor=3612MiB swap=5056.75M pressure=1 free=53%
+  t+510s engine a 3859M/real 2369MB b 3860M/real 2370MB; host nonfile=12567MiB compressor=3512MiB swap=5056.75M pressure=1 free=55%
+  t+540s engine a 3848M/real 2358MB b 3847M/real 2379MB; host nonfile=12472MiB compressor=3685MiB swap=5056.75M pressure=1 free=54%
+  t+570s engine a 3877M/real 2371MB b 3868M/real 2375MB; host nonfile=12298MiB compressor=3679MiB swap=5056.75M pressure=1 free=53%
+/Users/leslie/dev/emuu/scripts/farm-workload.sh: line 47: t: command not found
+/Users/leslie/dev/emuu/scripts/farm-workload.sh: line 47: t: command not found
+/Users/leslie/dev/emuu/scripts/farm-workload.sh: line 58: syntax error near unexpected token `done'
+/Users/leslie/dev/emuu/scripts/farm-workload.sh: line 58: `done'
+/Users/leslie/dev/emuu/scripts/farm-workload.sh: line 58: syntax error near unexpected token `done'
+/Users/leslie/dev/emuu/scripts/farm-workload.sh: line 58: `done'
+  10:32:52 emulator-5578 FAIL: adb uninstall dev.emuu.securetest
+  10:32:51 emulator-5580 FAIL: adb uninstall dev.emuu.securetest
+after loop: engine a 3909M/real 2417MB b 3897M/real 2407MB; host nonfile=12491MiB compressor=3562MiB swap=5056.75M pressure=1 free=54%
+reset 1 (snapshot load → adb-ready): 1.35 s; test app after reset: gone
+reset 2 (snapshot load → adb-ready): 1.03 s; test app after reset: gone
+reset 3 (snapshot load → adb-ready): 0.99 s; test app after reset: gone
+after resets: engine a 3932M/real 2494MB
+host after cleanup: nonfile=8243MiB compressor=3264MiB swap=5056.75M pressure=1 free=58%

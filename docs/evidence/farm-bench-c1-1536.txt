@@ -1,0 +1,41 @@
+== farm-bench c1-1536: guest 1536 MB, 1 cores, gpu host, lean=0, loop 600s, 2026-11-19 10:46:20
+host before: nonfile=7872MiB compressor=3558MiB swap=5024.75M pressure=1 free=56%
+golden cold boot: 22.72 s
+golden after settle: engine 3283M/real 1751MB, guest MemAvailable: 568808 kB
+clone a: 0.05 s
+clone b: 0.04 s
+clone disk: du (apparent sharing ignored) 2.9G; volume free 117Gi
+resume a: 2.02 s
+resume b: 2.11 s
+  INFO         | Loading snapshot 'default_boot'...
+  INFO         | Successfully loaded snapshot 'default_boot' using 1087 ms
+  INFO         | Loading snapshot 'default_boot'...
+  INFO         | Successfully loaded snapshot 'default_boot' using 937 ms
+after boot+30s: engine a 3429M/real 1987MB b 3475M/real 2032MB; host nonfile=12131MiB compressor=3630MiB swap=5016.75M pressure=1 free=56%
+  t+30s engine a 3557M/real 2094MB b 3591M/real 2124MB; host nonfile=12333MiB compressor=3531MiB swap=5016.75M pressure=1 free=54%
+  t+60s engine a 3596M/real 2112MB b 3653M/real 2167MB; host nonfile=12339MiB compressor=3490MiB swap=5016.75M pressure=1 free=55%
+  t+90s engine a 3622M/real 2116MB b 3682M/real 2177MB; host nonfile=12368MiB compressor=3579MiB swap=5016.75M pressure=1 free=54%
+  t+120s engine a 3648M/real 2138MB b 3680M/real 2168MB; host nonfile=12416MiB compressor=3564MiB swap=5016.75M pressure=1 free=55%
+  t+150s engine a 3641M/real 2158MB b 3715M/real 2192MB; host nonfile=12434MiB compressor=3512MiB swap=5016.75M pressure=1 free=54%
+  t+180s engine a 3659M/real 2150MB b 3714M/real 2201MB; host nonfile=12380MiB compressor=3497MiB swap=5016.75M pressure=1 free=54%
+  t+210s engine a 3666M/real 2151MB b 3710M/real 2197MB; host nonfile=12402MiB compressor=3465MiB swap=5016.75M pressure=1 free=56%
+  t+240s engine a 3675M/real 2160MB b 3713M/real 2200MB; host nonfile=12517MiB compressor=3360MiB swap=5016.75M pressure=1 free=56%
+  t+270s engine a 3663M/real 2148MB b 3708M/real 2194MB; host nonfile=12414MiB compressor=3504MiB swap=5008.75M pressure=1 free=54%
+  t+300s engine a 3679M/real 2164MB b 3720M/real 2207MB; host nonfile=12502MiB compressor=3402MiB swap=5008.75M pressure=1 free=56%
+  t+330s engine a 3674M/real 2179MB b 3726M/real 2211MB; host nonfile=12477MiB compressor=3480MiB swap=5008.75M pressure=1 free=55%
+  t+360s engine a 3672M/real 2155MB b 3720M/real 2205MB; host nonfile=12581MiB compressor=3685MiB swap=4992.75M pressure=1 free=53%
+  t+390s engine a 3690M/real 2172MB b 3729M/real 2214MB; host nonfile=12564MiB compressor=3529MiB swap=4992.75M pressure=1 free=54%
+  t+420s engine a 3699M/real 2171MB b 3734M/real 2219MB; host nonfile=12525MiB compressor=3626MiB swap=4992.75M pressure=1 free=54%
+  t+450s engine a 3692M/real 2174MB b 3737M/real 2214MB; host nonfile=12500MiB compressor=3679MiB swap=4992.75M pressure=1 free=54%
+  t+480s engine a 3697M/real 2180MB b 3732M/real 2212MB; host nonfile=12467MiB compressor=3658MiB swap=4992.75M pressure=1 free=53%
+  t+510s engine a 3710M/real 2196MB b 3748M/real 2230MB; host nonfile=12472MiB compressor=3663MiB swap=4992.75M pressure=1 free=54%
+  t+540s engine a 3699M/real 2181MB b 3741M/real 2223MB; host nonfile=12424MiB compressor=3649MiB swap=4992.75M pressure=1 free=54%
+  t+570s engine a 3705M/real 2188MB b 3749M/real 2227MB; host nonfile=12491MiB compressor=3648MiB swap=4976.75M pressure=1 free=54%
+emulator-5578 iterations=128 ok=1664 failed=0 secs=601 iter_per_min=12.8 boot_id_changes=0 aborted=0
+emulator-5580 iterations=129 ok=1677 failed=0 secs=604 iter_per_min=12.8 boot_id_changes=0 aborted=0
+after loop: engine a 3624M/real 2106MB b 3746M/real 2228MB; host nonfile=12426MiB compressor=3641MiB swap=4968.75M pressure=1 free=54%
+reset 1 (snapshot load → adb-ready): 1.54 s; test app after reset: gone
+reset 2 (snapshot load → adb-ready): 1.18 s; test app after reset: gone
+reset 3 (snapshot load → adb-ready): 0.74 s; test app after reset: gone
+after resets: engine a 3692M/real 2234MB
+host after cleanup: nonfile=8185MiB compressor=3507MiB swap=4968.75M pressure=1 free=56%

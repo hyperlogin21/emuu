@@ -1,0 +1,1873 @@
+{
+  "formatVersion" : 1,
+  "pools" : [
+    {
+      "capacity" : {
+        "admitNow" : false,
+        "admitReason" : "at capacity: 2 of 2 devices (limited by memory)",
+        "availableBytes" : 8933531932,
+        "byCPU" : 5,
+        "byMemory" : 2,
+        "byPorts" : 16,
+        "ceiling" : 2,
+        "coresPerDevice" : 2,
+        "cpuCores" : 10,
+        "limitedBy" : "memory",
+        "perDeviceBytes" : 3038773248,
+        "physicalMemoryBytes" : 17179869184,
+        "pressure" : 0,
+        "reserveBytes" : 8589934592
+      },
+      "daemonAlive" : true,
+      "state" : {
+        "counters" : {
+          "acquires" : 86,
+          "hangsDetected" : 1,
+          "leasesExpired" : 0,
+          "rebootsDetected" : 0,
+          "recoveries" : 0,
+          "recycles" : 0,
+          "releases" : 86,
+          "replacements" : 2,
+          "resetFailures" : 1,
+          "resets" : 84
+        },
+        "createdAt" : "2026-11-19T03:18:32Z",
+        "daemonPID" : 54605,
+        "devices" : [
+          {
+            "consolePort" : 5554,
+            "enginePID" : 71317,
+            "failedRecoveries" : 0,
+            "instance" : "farm-default-1",
+            "lastHealth" : {
+              "at" : "2026-11-19T03:54:24Z",
+              "reason" : "ok",
+              "verdict" : "healthy"
+            },
+            "note" : "engine is SIGSTOPped but Emuu did not freeze it",
+            "recycleNext" : false,
+            "replacements" : 1,
+            "resets" : 42,
+            "serial" : "emulator-5554",
+            "since" : "2026-11-19T03:54:08Z",
+            "state" : "ready"
+          },
+          {
+            "consolePort" : 5556,
+            "enginePID" : 71169,
+            "failedRecoveries" : 0,
+            "instance" : "farm-default-2",
+            "lastHealth" : {
+              "at" : "2026-11-19T03:54:25Z",
+              "reason" : "ok",
+              "verdict" : "healthy"
+            },
+            "note" : "Cannot reset to snapshot while instance is crashed (engine signal 9).",
+            "recycleNext" : false,
+            "replacements" : 1,
+            "resets" : 42,
+            "serial" : "emulator-5556",
+            "since" : "2026-11-19T03:54:05Z",
+            "state" : "ready"
+          }
+        ],
+        "formatVersion" : 1,
+        "golden" : "base",
+        "history" : [
+          {
+            "at" : "2026-11-19T03:18:32Z",
+            "detail" : "pid 54605 started",
+            "kind" : "daemon"
+          },
+          {
+            "at" : "2026-11-19T03:18:32Z",
+            "detail" : "new device on port 5554",
+            "device" : "farm-default-1",
+            "kind" : "add"
+          },
+          {
+            "at" : "2026-11-19T03:18:32Z",
+            "detail" : "new device on port 5556",
+            "device" : "farm-default-2",
+            "kind" : "add"
+          },
+          {
+            "at" : "2026-11-19T03:18:38Z",
+            "detail" : "adb-ready in 5.23 s",
+            "device" : "farm-default-1",
+            "kind" : "ready"
+          },
+          {
+            "at" : "2026-11-19T03:18:38Z",
+            "detail" : "adb-ready in 5.24 s",
+            "device" : "farm-default-2",
+            "kind" : "ready"
+          },
+          {
+            "at" : "2026-11-19T03:18:38Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-067038df"
+          },
+          {
+            "at" : "2026-11-19T03:18:38Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-0c5aa4dc"
+          },
+          {
+            "at" : "2026-11-19T03:18:38Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-067038df"
+          },
+          {
+            "at" : "2026-11-19T03:18:43Z",
+            "detail" : "golden state, adb-ready in 4.68 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:18:43Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-0c5aa4dc"
+          },
+          {
+            "at" : "2026-11-19T03:18:48Z",
+            "detail" : "golden state, adb-ready in 4.71 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:18:49Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-e87a8197"
+          },
+          {
+            "at" : "2026-11-19T03:18:52Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-9a291f94"
+          },
+          {
+            "at" : "2026-11-19T03:19:36Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-e87a8197"
+          },
+          {
+            "at" : "2026-11-19T03:19:38Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-9a291f94"
+          },
+          {
+            "at" : "2026-11-19T03:19:41Z",
+            "detail" : "golden state, adb-ready in 4.38 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:19:41Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-bea0e288"
+          },
+          {
+            "at" : "2026-11-19T03:19:43Z",
+            "detail" : "golden state, adb-ready in 4.36 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:19:43Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-9e9eeb44"
+          },
+          {
+            "at" : "2026-11-19T03:20:28Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-9e9eeb44"
+          },
+          {
+            "at" : "2026-11-19T03:20:29Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-bea0e288"
+          },
+          {
+            "at" : "2026-11-19T03:20:32Z",
+            "detail" : "golden state, adb-ready in 4.33 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:20:32Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-52303be1"
+          },
+          {
+            "at" : "2026-11-19T03:20:34Z",
+            "detail" : "golden state, adb-ready in 4.40 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:20:34Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-7d9656f1"
+          },
+          {
+            "at" : "2026-11-19T03:21:18Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-52303be1"
+          },
+          {
+            "at" : "2026-11-19T03:21:19Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-7d9656f1"
+          },
+          {
+            "at" : "2026-11-19T03:21:23Z",
+            "detail" : "golden state, adb-ready in 4.71 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:21:23Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-abe28573"
+          },
+          {
+            "at" : "2026-11-19T03:21:24Z",
+            "detail" : "golden state, adb-ready in 4.60 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:21:24Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-7805c597"
+          },
+          {
+            "at" : "2026-11-19T03:22:08Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-abe28573"
+          },
+          {
+            "at" : "2026-11-19T03:22:09Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-7805c597"
+          },
+          {
+            "at" : "2026-11-19T03:22:13Z",
+            "detail" : "golden state, adb-ready in 5.01 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:22:13Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-4f9ec86b"
+          },
+          {
+            "at" : "2026-11-19T03:22:13Z",
+            "detail" : "golden state, adb-ready in 4.47 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:22:13Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-02e2de80"
+          },
+          {
+            "at" : "2026-11-19T03:22:58Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-4f9ec86b"
+          },
+          {
+            "at" : "2026-11-19T03:23:00Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-02e2de80"
+          },
+          {
+            "at" : "2026-11-19T03:23:03Z",
+            "detail" : "golden state, adb-ready in 4.95 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:23:03Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-25d47b06"
+          },
+          {
+            "at" : "2026-11-19T03:23:05Z",
+            "detail" : "golden state, adb-ready in 4.30 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:23:05Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-6e7c723d"
+          },
+          {
+            "at" : "2026-11-19T03:23:49Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-25d47b06"
+          },
+          {
+            "at" : "2026-11-19T03:23:50Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-6e7c723d"
+          },
+          {
+            "at" : "2026-11-19T03:23:54Z",
+            "detail" : "golden state, adb-ready in 4.47 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:23:54Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-8ffba631"
+          },
+          {
+            "at" : "2026-11-19T03:23:55Z",
+            "detail" : "golden state, adb-ready in 4.23 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:23:55Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-4e7751ce"
+          },
+          {
+            "at" : "2026-11-19T03:24:39Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-8ffba631"
+          },
+          {
+            "at" : "2026-11-19T03:24:41Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-4e7751ce"
+          },
+          {
+            "at" : "2026-11-19T03:24:44Z",
+            "detail" : "golden state, adb-ready in 4.33 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:24:44Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-c96f0f97"
+          },
+          {
+            "at" : "2026-11-19T03:24:46Z",
+            "detail" : "golden state, adb-ready in 4.38 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:24:46Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-f8cdb2d1"
+          },
+          {
+            "at" : "2026-11-19T03:25:29Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-c96f0f97"
+          },
+          {
+            "at" : "2026-11-19T03:25:32Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-f8cdb2d1"
+          },
+          {
+            "at" : "2026-11-19T03:25:34Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:25:34Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-17f7a98d"
+          },
+          {
+            "at" : "2026-11-19T03:25:36Z",
+            "detail" : "golden state, adb-ready in 4.65 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:25:37Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-0d60a419"
+          },
+          {
+            "at" : "2026-11-19T03:26:20Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-17f7a98d"
+          },
+          {
+            "at" : "2026-11-19T03:26:25Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-0d60a419"
+          },
+          {
+            "at" : "2026-11-19T03:26:25Z",
+            "detail" : "golden state, adb-ready in 4.52 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:26:25Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-e93d8c73"
+          },
+          {
+            "at" : "2026-11-19T03:26:29Z",
+            "detail" : "golden state, adb-ready in 4.30 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:26:29Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-ea5f59c2"
+          },
+          {
+            "at" : "2026-11-19T03:27:11Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-e93d8c73"
+          },
+          {
+            "at" : "2026-11-19T03:27:15Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-ea5f59c2"
+          },
+          {
+            "at" : "2026-11-19T03:27:16Z",
+            "detail" : "golden state, adb-ready in 4.40 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:27:16Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-e45697ef"
+          },
+          {
+            "at" : "2026-11-19T03:27:21Z",
+            "detail" : "golden state, adb-ready in 4.68 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:27:21Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-b40353a4"
+          },
+          {
+            "at" : "2026-11-19T03:28:01Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-e45697ef"
+          },
+          {
+            "at" : "2026-11-19T03:28:06Z",
+            "detail" : "golden state, adb-ready in 4.61 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:28:06Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-4c10038e"
+          },
+          {
+            "at" : "2026-11-19T03:28:09Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-b40353a4"
+          },
+          {
+            "at" : "2026-11-19T03:28:13Z",
+            "detail" : "golden state, adb-ready in 4.42 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:28:14Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-00ea713c"
+          },
+          {
+            "at" : "2026-11-19T03:28:53Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-4c10038e"
+          },
+          {
+            "at" : "2026-11-19T03:28:58Z",
+            "detail" : "golden state, adb-ready in 4.24 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:28:58Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-d6e20422"
+          },
+          {
+            "at" : "2026-11-19T03:29:00Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-00ea713c"
+          },
+          {
+            "at" : "2026-11-19T03:29:05Z",
+            "detail" : "golden state, adb-ready in 4.45 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:29:05Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-e432f4d0"
+          },
+          {
+            "at" : "2026-11-19T03:29:44Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-d6e20422"
+          },
+          {
+            "at" : "2026-11-19T03:29:49Z",
+            "detail" : "golden state, adb-ready in 4.51 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:29:49Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-08f65b01"
+          },
+          {
+            "at" : "2026-11-19T03:29:51Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-e432f4d0"
+          },
+          {
+            "at" : "2026-11-19T03:29:55Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:29:56Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-5b311d11"
+          },
+          {
+            "at" : "2026-11-19T03:30:35Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-08f65b01"
+          },
+          {
+            "at" : "2026-11-19T03:30:40Z",
+            "detail" : "golden state, adb-ready in 4.36 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:30:40Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-92bf9d37"
+          },
+          {
+            "at" : "2026-11-19T03:30:43Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-5b311d11"
+          },
+          {
+            "at" : "2026-11-19T03:30:48Z",
+            "detail" : "golden state, adb-ready in 4.50 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:30:48Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-b10c76c6"
+          },
+          {
+            "at" : "2026-11-19T03:30:55Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-92bf9d37"
+          },
+          {
+            "at" : "2026-11-19T03:30:55Z",
+            "detail" : "Cannot reset to snapshot while instance is crashed (engine signal 9).; recycling",
+            "device" : "farm-default-2",
+            "kind" : "reset-failed"
+          },
+          {
+            "at" : "2026-11-19T03:30:57Z",
+            "detail" : "hung: engine is SIGSTOPped but Emuu did not freeze it (confirming)",
+            "device" : "farm-default-1",
+            "kind" : "suspect",
+            "lease" : "L-b10c76c6"
+          },
+          {
+            "at" : "2026-11-19T03:31:00Z",
+            "detail" : "adb-ready in 4.72 s",
+            "device" : "farm-default-2",
+            "kind" : "recycled"
+          },
+          {
+            "at" : "2026-11-19T03:31:01Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-01b402fe"
+          },
+          {
+            "at" : "2026-11-19T03:31:02Z",
+            "detail" : "hung: engine is SIGSTOPped but Emuu did not freeze it",
+            "device" : "farm-default-1",
+            "kind" : "unhealthy",
+            "lease" : "L-b10c76c6"
+          },
+          {
+            "at" : "2026-11-19T03:31:02Z",
+            "detail" : "engine is SIGSTOPped but Emuu did not freeze it",
+            "device" : "farm-default-1",
+            "kind" : "device_lost",
+            "lease" : "L-b10c76c6"
+          },
+          {
+            "at" : "2026-11-19T03:31:02Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-b10c76c6"
+          },
+          {
+            "at" : "2026-11-19T03:31:07Z",
+            "detail" : "adb-ready in 4.54 s",
+            "device" : "farm-default-1",
+            "kind" : "recycled"
+          },
+          {
+            "at" : "2026-11-19T03:31:07Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-3172a065"
+          },
+          {
+            "at" : "2026-11-19T03:31:46Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-01b402fe"
+          },
+          {
+            "at" : "2026-11-19T03:31:51Z",
+            "detail" : "golden state, adb-ready in 4.40 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:31:51Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-1d7b7611"
+          },
+          {
+            "at" : "2026-11-19T03:31:53Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-3172a065"
+          },
+          {
+            "at" : "2026-11-19T03:31:57Z",
+            "detail" : "golden state, adb-ready in 4.18 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:31:57Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-78a9f82e"
+          },
+          {
+            "at" : "2026-11-19T03:32:37Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-1d7b7611"
+          },
+          {
+            "at" : "2026-11-19T03:32:42Z",
+            "detail" : "golden state, adb-ready in 4.22 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:32:42Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-385fb8ba"
+          },
+          {
+            "at" : "2026-11-19T03:32:44Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-78a9f82e"
+          },
+          {
+            "at" : "2026-11-19T03:32:49Z",
+            "detail" : "golden state, adb-ready in 4.45 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:32:49Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-24321807"
+          },
+          {
+            "at" : "2026-11-19T03:33:28Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-385fb8ba"
+          },
+          {
+            "at" : "2026-11-19T03:33:33Z",
+            "detail" : "golden state, adb-ready in 4.29 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:33:33Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-8a4dda82"
+          },
+          {
+            "at" : "2026-11-19T03:33:34Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-24321807"
+          },
+          {
+            "at" : "2026-11-19T03:33:39Z",
+            "detail" : "golden state, adb-ready in 4.19 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:33:39Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-f3d93490"
+          },
+          {
+            "at" : "2026-11-19T03:34:19Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-8a4dda82"
+          },
+          {
+            "at" : "2026-11-19T03:34:23Z",
+            "detail" : "golden state, adb-ready in 4.44 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:34:24Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-b912ae66"
+          },
+          {
+            "at" : "2026-11-19T03:34:25Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-f3d93490"
+          },
+          {
+            "at" : "2026-11-19T03:34:30Z",
+            "detail" : "golden state, adb-ready in 4.54 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:34:30Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-2e9b0ee3"
+          },
+          {
+            "at" : "2026-11-19T03:35:11Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-b912ae66"
+          },
+          {
+            "at" : "2026-11-19T03:35:16Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:35:16Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-1d9d7ca9"
+          },
+          {
+            "at" : "2026-11-19T03:35:16Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-2e9b0ee3"
+          },
+          {
+            "at" : "2026-11-19T03:35:21Z",
+            "detail" : "golden state, adb-ready in 4.67 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:35:21Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-ba778e97"
+          },
+          {
+            "at" : "2026-11-19T03:36:01Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-1d9d7ca9"
+          },
+          {
+            "at" : "2026-11-19T03:36:06Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:36:06Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-38576ae6"
+          },
+          {
+            "at" : "2026-11-19T03:36:07Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-ba778e97"
+          },
+          {
+            "at" : "2026-11-19T03:36:11Z",
+            "detail" : "golden state, adb-ready in 4.55 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:36:11Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-96fbea95"
+          },
+          {
+            "at" : "2026-11-19T03:36:51Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-38576ae6"
+          },
+          {
+            "at" : "2026-11-19T03:36:56Z",
+            "detail" : "golden state, adb-ready in 4.67 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:36:56Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-916fe298"
+          },
+          {
+            "at" : "2026-11-19T03:36:57Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-96fbea95"
+          },
+          {
+            "at" : "2026-11-19T03:37:02Z",
+            "detail" : "golden state, adb-ready in 4.43 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:37:02Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-5c2e44bf"
+          },
+          {
+            "at" : "2026-11-19T03:37:42Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-916fe298"
+          },
+          {
+            "at" : "2026-11-19T03:37:47Z",
+            "detail" : "golden state, adb-ready in 4.47 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:37:47Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-3939089a"
+          },
+          {
+            "at" : "2026-11-19T03:37:49Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-5c2e44bf"
+          },
+          {
+            "at" : "2026-11-19T03:37:54Z",
+            "detail" : "golden state, adb-ready in 4.25 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:37:54Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-ad3068d4"
+          },
+          {
+            "at" : "2026-11-19T03:38:34Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-3939089a"
+          },
+          {
+            "at" : "2026-11-19T03:38:39Z",
+            "detail" : "golden state, adb-ready in 4.45 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:38:39Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-c2255f33"
+          },
+          {
+            "at" : "2026-11-19T03:38:41Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-ad3068d4"
+          },
+          {
+            "at" : "2026-11-19T03:38:46Z",
+            "detail" : "golden state, adb-ready in 4.32 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:38:46Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-ccd3409d"
+          },
+          {
+            "at" : "2026-11-19T03:39:26Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-c2255f33"
+          },
+          {
+            "at" : "2026-11-19T03:39:31Z",
+            "detail" : "golden state, adb-ready in 4.60 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:39:31Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-e20458f0"
+          },
+          {
+            "at" : "2026-11-19T03:39:33Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-ccd3409d"
+          },
+          {
+            "at" : "2026-11-19T03:39:38Z",
+            "detail" : "golden state, adb-ready in 4.31 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:39:38Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-84c60f39"
+          },
+          {
+            "at" : "2026-11-19T03:40:18Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-e20458f0"
+          },
+          {
+            "at" : "2026-11-19T03:40:23Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:40:23Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-dde0e48d"
+          },
+          {
+            "at" : "2026-11-19T03:40:25Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-84c60f39"
+          },
+          {
+            "at" : "2026-11-19T03:40:30Z",
+            "detail" : "golden state, adb-ready in 4.29 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:40:30Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-48e97065"
+          },
+          {
+            "at" : "2026-11-19T03:41:10Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-dde0e48d"
+          },
+          {
+            "at" : "2026-11-19T03:41:15Z",
+            "detail" : "golden state, adb-ready in 4.39 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:41:15Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-0df56810"
+          },
+          {
+            "at" : "2026-11-19T03:41:17Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-48e97065"
+          },
+          {
+            "at" : "2026-11-19T03:41:22Z",
+            "detail" : "golden state, adb-ready in 4.61 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:41:22Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-6bd1a8b3"
+          },
+          {
+            "at" : "2026-11-19T03:42:02Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-0df56810"
+          },
+          {
+            "at" : "2026-11-19T03:42:07Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:42:07Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-897d9d30"
+          },
+          {
+            "at" : "2026-11-19T03:42:09Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-6bd1a8b3"
+          },
+          {
+            "at" : "2026-11-19T03:42:13Z",
+            "detail" : "golden state, adb-ready in 4.32 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:42:13Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-984c123b"
+          },
+          {
+            "at" : "2026-11-19T03:42:54Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-897d9d30"
+          },
+          {
+            "at" : "2026-11-19T03:42:59Z",
+            "detail" : "golden state, adb-ready in 4.40 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:42:59Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-eca7b67b"
+          },
+          {
+            "at" : "2026-11-19T03:43:00Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-984c123b"
+          },
+          {
+            "at" : "2026-11-19T03:43:05Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:43:05Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-1ea12f79"
+          },
+          {
+            "at" : "2026-11-19T03:43:46Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-eca7b67b"
+          },
+          {
+            "at" : "2026-11-19T03:43:50Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-1ea12f79"
+          },
+          {
+            "at" : "2026-11-19T03:43:51Z",
+            "detail" : "golden state, adb-ready in 4.66 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:43:51Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-a43e6445"
+          },
+          {
+            "at" : "2026-11-19T03:43:54Z",
+            "detail" : "golden state, adb-ready in 4.44 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:43:54Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-bc5e12bd"
+          },
+          {
+            "at" : "2026-11-19T03:44:38Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-a43e6445"
+          },
+          {
+            "at" : "2026-11-19T03:44:42Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-bc5e12bd"
+          },
+          {
+            "at" : "2026-11-19T03:44:43Z",
+            "detail" : "golden state, adb-ready in 4.51 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:44:43Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-802cd737"
+          },
+          {
+            "at" : "2026-11-19T03:44:47Z",
+            "detail" : "golden state, adb-ready in 4.32 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:44:47Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-de5db9db"
+          },
+          {
+            "at" : "2026-11-19T03:45:31Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-802cd737"
+          },
+          {
+            "at" : "2026-11-19T03:45:35Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-de5db9db"
+          },
+          {
+            "at" : "2026-11-19T03:45:36Z",
+            "detail" : "golden state, adb-ready in 4.48 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:45:36Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-714d88e9"
+          },
+          {
+            "at" : "2026-11-19T03:45:39Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:45:40Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-931a688b"
+          },
+          {
+            "at" : "2026-11-19T03:46:21Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-714d88e9"
+          },
+          {
+            "at" : "2026-11-19T03:46:26Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-931a688b"
+          },
+          {
+            "at" : "2026-11-19T03:46:26Z",
+            "detail" : "golden state, adb-ready in 4.58 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:46:26Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-bffc9574"
+          },
+          {
+            "at" : "2026-11-19T03:46:30Z",
+            "detail" : "golden state, adb-ready in 4.44 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:46:31Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-5d9dfe6a"
+          },
+          {
+            "at" : "2026-11-19T03:47:14Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-bffc9574"
+          },
+          {
+            "at" : "2026-11-19T03:47:17Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-5d9dfe6a"
+          },
+          {
+            "at" : "2026-11-19T03:47:18Z",
+            "detail" : "golden state, adb-ready in 4.28 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:47:18Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-2ea80f51"
+          },
+          {
+            "at" : "2026-11-19T03:47:21Z",
+            "detail" : "golden state, adb-ready in 4.22 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:47:21Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-bbf21d1c"
+          },
+          {
+            "at" : "2026-11-19T03:48:03Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-2ea80f51"
+          },
+          {
+            "at" : "2026-11-19T03:48:07Z",
+            "detail" : "golden state, adb-ready in 4.25 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:48:07Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-d12070a4"
+          },
+          {
+            "at" : "2026-11-19T03:48:08Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-bbf21d1c"
+          },
+          {
+            "at" : "2026-11-19T03:48:13Z",
+            "detail" : "golden state, adb-ready in 4.41 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:48:13Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-899da10b"
+          },
+          {
+            "at" : "2026-11-19T03:48:54Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-d12070a4"
+          },
+          {
+            "at" : "2026-11-19T03:48:59Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-899da10b"
+          },
+          {
+            "at" : "2026-11-19T03:48:59Z",
+            "detail" : "golden state, adb-ready in 4.41 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:48:59Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-0b484fa9"
+          },
+          {
+            "at" : "2026-11-19T03:49:04Z",
+            "detail" : "golden state, adb-ready in 4.49 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:49:04Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-33df5529"
+          },
+          {
+            "at" : "2026-11-19T03:49:45Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-0b484fa9"
+          },
+          {
+            "at" : "2026-11-19T03:49:49Z",
+            "detail" : "golden state, adb-ready in 4.42 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:49:49Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-8fc46701"
+          },
+          {
+            "at" : "2026-11-19T03:49:50Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-33df5529"
+          },
+          {
+            "at" : "2026-11-19T03:49:55Z",
+            "detail" : "golden state, adb-ready in 4.36 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:49:55Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-5b8613ab"
+          },
+          {
+            "at" : "2026-11-19T03:50:35Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-8fc46701"
+          },
+          {
+            "at" : "2026-11-19T03:50:40Z",
+            "detail" : "golden state, adb-ready in 4.43 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:50:40Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-760a7ff5"
+          },
+          {
+            "at" : "2026-11-19T03:50:41Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-5b8613ab"
+          },
+          {
+            "at" : "2026-11-19T03:50:46Z",
+            "detail" : "golden state, adb-ready in 4.46 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:50:46Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-c0915677"
+          },
+          {
+            "at" : "2026-11-19T03:51:27Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-760a7ff5"
+          },
+          {
+            "at" : "2026-11-19T03:51:32Z",
+            "detail" : "golden state, adb-ready in 4.39 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:51:32Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-20519495"
+          },
+          {
+            "at" : "2026-11-19T03:51:32Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-c0915677"
+          },
+          {
+            "at" : "2026-11-19T03:51:37Z",
+            "detail" : "golden state, adb-ready in 4.74 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:51:38Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-65696c43"
+          },
+          {
+            "at" : "2026-11-19T03:52:19Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-20519495"
+          },
+          {
+            "at" : "2026-11-19T03:52:23Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-65696c43"
+          },
+          {
+            "at" : "2026-11-19T03:52:23Z",
+            "detail" : "golden state, adb-ready in 4.47 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:52:24Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-d9dacbc0"
+          },
+          {
+            "at" : "2026-11-19T03:52:28Z",
+            "detail" : "golden state, adb-ready in 4.37 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:52:28Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-07d1358a"
+          },
+          {
+            "at" : "2026-11-19T03:53:11Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-d9dacbc0"
+          },
+          {
+            "at" : "2026-11-19T03:53:13Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-07d1358a"
+          },
+          {
+            "at" : "2026-11-19T03:53:15Z",
+            "detail" : "golden state, adb-ready in 4.24 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:53:16Z",
+            "detail" : "leased emulator-5556",
+            "device" : "farm-default-2",
+            "kind" : "acquire",
+            "lease" : "L-eab24760"
+          },
+          {
+            "at" : "2026-11-19T03:53:18Z",
+            "detail" : "golden state, adb-ready in 4.59 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:53:18Z",
+            "detail" : "leased emulator-5554",
+            "device" : "farm-default-1",
+            "kind" : "acquire",
+            "lease" : "L-80f3692e"
+          },
+          {
+            "at" : "2026-11-19T03:54:01Z",
+            "detail" : "released",
+            "device" : "farm-default-2",
+            "kind" : "release",
+            "lease" : "L-eab24760"
+          },
+          {
+            "at" : "2026-11-19T03:54:03Z",
+            "detail" : "released",
+            "device" : "farm-default-1",
+            "kind" : "release",
+            "lease" : "L-80f3692e"
+          },
+          {
+            "at" : "2026-11-19T03:54:05Z",
+            "detail" : "golden state, adb-ready in 4.22 s",
+            "device" : "farm-default-2",
+            "kind" : "reset"
+          },
+          {
+            "at" : "2026-11-19T03:54:08Z",
+            "detail" : "golden state, adb-ready in 4.58 s",
+            "device" : "farm-default-1",
+            "kind" : "reset"
+          }
+        ],
+        "leases" : [
+
+        ],
+        "policy" : {
+          "defaultTTL" : 1800,
+          "freezeIdleAfter" : 60,
+          "healLeased" : "replace",
+          "overrideCapacity" : true,
+          "releaseMode" : "reset",
+          "selfHeal" : true
+        },
+        "pool" : "default",
+        "size" : 2,
+        "stopRequested" : false,
+        "updatedAt" : "2026-11-19T03:54:38Z"
+      }
+    }
+  ]
+}

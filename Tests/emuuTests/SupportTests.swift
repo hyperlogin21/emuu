@@ -3,6 +3,7 @@ import Testing
 import EmuuBase
 import EmuuMemory
 import EmuuTestSupport
+import EmuuFarm
 @testable import emuu
 
 /// Short temp dir (unix socket paths are limited to 103 bytes).
@@ -375,6 +376,21 @@ func shortTempDir() throws -> URL {
         #expect(noSDK.first { $0.name == "Apple Silicon" }?.level == .fail)
         #expect(!noSDK.contains { $0.name == "adb" })
         #expect(noSDK.last?.name == "Instances")
+    }
+
+    @Test func farmChecks() {
+        var f = Self.facts()
+        f.supportsClones = false
+        f.freeDiskBytes = 10 * ByteCount.gib
+        let cost = DeviceCost.estimate(guestRAMMB: 2048, cores: 2)
+        f.farmCost = cost
+        f.farmCapacity = CapacityGuard.evaluate(host: HostFacts(physicalMemoryBytes: 16 * ByteCount.gib, cpuCores: 10,
+                                                                availableBytes: 8 * ByteCount.gib, pressure: .normal), cost: cost)
+        let checks = f.evaluate()
+        #expect(checks.first { $0.name == "Farm: APFS clones" }?.level == .warn)
+        #expect(checks.first { $0.name == "Farm: free disk" }?.level == .warn)
+        let cap = checks.first { $0.name == "Farm: capacity" }
+        #expect(cap?.detail.hasPrefix("2 device(s) (limited by memory)") == true)
     }
 
     @Test func versionParsing() {

@@ -1,0 +1,21 @@
+== farm-soak: golden base, 2 devices, 35 min, fault at minute 12, 2026-11-19 11:18:32
+host before: nonfile=8441MiB compressor=2878MiB swap=5411.81M pressure_level=1 free=60%
+2 device(s) ready in 5.7 s.
+  11:18:38 ready farm-default-1: adb-ready in 5.23 s
+  11:18:38 ready farm-default-2: adb-ready in 5.24 s
+disk: volume free fell by 84 MiB after cloning + resuming 2 devices (APFS clones share the golden's blocks)
+concurrent acquire: 6 processes, 2 leases on 2 distinct devices, 4 got exit 69
+11:30:55 FAULT: SIGSTOP farm-default-1 (engine pid 54606), kill -9 farm-default-2 (engine pid 54608)
+11:31:08 pool back to 2 healthy devices 13 s after the fault
+  +  2.0s suspect        farm-default-1 hung: engine is SIGSTOPped but Emuu did not freeze it (confirming)
+  +  5.0s recycled       farm-default-2 adb-ready in 4.72 s
+  +  7.0s unhealthy      farm-default-1 hung: engine is SIGSTOPped but Emuu did not freeze it
+  +  7.0s device_lost    farm-default-1 engine is SIGSTOPped but Emuu did not freeze it
+  + 12.0s recycled       farm-default-1 adb-ready in 4.54 s
+disk: volume free fell by 579 MiB at the end of the run, before farm down (other processes write too: ±100 MiB)
+host after farm down: nonfile=8093MiB compressor=3191MiB swap=5331.81M pressure_level=1 free=58%
+worker 1: chunks=42 iterations=518 adb_ok=6725 adb_failed=2 device_lost=1 guest_boot_id_changes=0
+worker 2: chunks=42 iterations=524 adb_ok=6803 adb_failed=2 device_lost=2 guest_boot_id_changes=0
+farm counters: acquires=86, hangsDetected=1, leasesExpired=0, rebootsDetected=0, recoveries=0, recycles=0, releases=86, replacements=2, resetFailures=1, resets=84
+host: max memorystatus_vm_pressure_level=1 (1 normal, 2 warn, 4 critical), min free=46%
+raw logs: /private/tmp/claude-501/-Users-leslie-dev-emuu/c4db58ba-5e83-40c0-a7f6-74dbd9155ac5/scratchpad/soak/run1

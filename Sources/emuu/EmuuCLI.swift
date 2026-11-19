@@ -18,6 +18,11 @@ struct EmuuCLI: ParsableCommand {
           emuu playstore              open the Play Store (sign in on the device)
           emuu mem                    live governor view
           emuu hibernate / resume     give all memory back, come back in ~2 s
+
+        Automation farm:
+          emuu golden create base --seal   prepared golden image (quick-boot snapshot)
+          emuu farm up --size auto         warm devices; farm acquire / release / status
+          emuu run -- ./run-tests.sh       fresh device for one command (ANDROID_SERIAL set)
         """,
         version: Emuu.version,
         subcommands: [
@@ -25,6 +30,8 @@ struct EmuuCLI: ParsableCommand {
             Start.self, Stop.self, Freeze.self, Thaw.self, Hibernate.self, Resume.self, Status.self,
             Install.self, Apps.self, Launch.self, Uninstall.self, Playstore.self, Screenshot.self, Record.self, Rotate.self, Shell.self,
             Keyboard.self, Automation.self,
+            Health.self, Reboot.self, Heal.self,
+            Golden.self, Clone.self, Farm.self, Run.self,
             Logs.self, Mem.self, Bench.self, Paths.self,
         ])
 

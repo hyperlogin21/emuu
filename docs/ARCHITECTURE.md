@@ -76,6 +76,7 @@ mode** (strict concurrency). It targets macOS 14 on arm64.
 | `CEmuuShim` | C library | – | `shm_open` wrapper (variadic in C) |
 | `EmuuGRPC` | library | EmuuBase, CEmuuShim | minimal gRPC/HTTP/2 (h2c) client with HPACK, protobuf wire codec, the `EmulatorController` messages Emuu uses (hand-written, no protoc), discovery-file reader, shared-memory region |
 | `EmuuDisplay` | library | EmuuBase, EmuuGRPC | display session (frames, input, clipboard, rotation), frame converter, layer sink, H.264 recorder, input translation, NSView |
+| `EmuuFarm` | library | EmuuBase, EmuuEngine | farm: golden records, pool state + leases (flock), capacity guard, port plan, pool controller, health probes, self-heal state machine, live driver |
 | `emuu` | executable | all + swift-argument-parser | CLI |
 | `EmuuApp` | executable | all | SwiftUI app |
 | `Emuu<X>Tests` | test | `<X>` + EmuuTestSupport | one per library (swift-testing: `import Testing`) |
@@ -339,6 +340,53 @@ AVD tuning (EmuuEngine config generation):
   stored as `InstanceConfig.automationMode`. `GuestEffector` always excludes packages with running
   instrumentation (`InstrumentationProbe`). `ADBActivityDetector` turns other tools' adb traffic (extra adbd
   children, guest pid rate) into "user activity".
+
+
+## Automation farm and self-healing (EmuuFarm, `emuu golden|clone|farm|run|health|heal|reboot`)
+
+```
+ emuu farm acquire/release/heartbeat/status ─┐            emuu run ──┬─ lease from a pool, or
+                                             │  flock      (holder =  └─ ephemeral clone (farm/ephemeral/<id>.json)
+                       farm/pools/<p>/state.json ◄──────── runner pid)
+                                             │
+ emuu farm daemon (one per pool, daemon.lock) └─ PoolController.tick() every 0.5 s
+     ├─ LeaseBook.expire (TTL / holder pid)            ├─ CapacityGuard (RAM, cores, ports, live pressure)
+     ├─ provision: InstanceStore.clone(golden, includeSnapshots) → EngineInstance.start (quick boot) → settle check
+     ├─ reset: console `avd snapshot load default_boot` → settle check;  recycle: kill -9 + re-clone + resume
+     └─ health (HealthProber) → SelfHealState → thaw / reconnect-adb / reset / replace;  leased: --heal-leased
+```
+
+* **Golden image** = an ordinary instance whose quick-boot snapshot was saved by `golden seal` after the farm
+  settings and ≥ 120 s of uptime; `farm/goldens/<name>.json` records its guest boot id, RAM, cores, image.
+* **Clone** (`InstanceStore.clone(includeSnapshots: true)`): `clonefile(2)` of every AVD file except per-launch
+  artifacts, the source's `config.ini` kept (the engine rewrites it on first boot, e.g. the 6 GiB userdata size)
+  with only `AvdId`/display name changed, and each `snapshots/*/hardware.ini` rewritten (AVD paths, `avd.name`,
+  `avd.id`): without that the engine refuses the snapshot ("hardware cannot load snapshot") and cold-boots.
+  `snapshot.pb` still names the golden's disks; the engine does not check them. Farm clones set
+  `discardStateOnExit` (`-no-snapshot-save`), `guestRAMEnforced` (`-qemu -m <MB>`, below the engine's 2048 MB
+  floor), fixed `ports`, `automationMode`.
+* **Engine `-read-only`** (several engines on one AVD) was measured and rejected: same resume time and
+  footprint, but each engine rewrote files in the golden's directory (`userdata-qemu.img.qcow2` mtime/size,
+  `hardware-qemu.ini`, `emu-launch-params.txt`) and a SIGKILLed engine left its temporary overlays in
+  `/tmp/android-<user>/`. Clones keep the golden immutable and clean up with the clone directory.
+* **Leases** (`LeaseBook`, pure, on `FarmState`): acquire takes the longest-idle ready device that passes a
+  fresh health check (frozen ones are SIGCONTed first); release → `resetting`; TTL and holder-pid expiry;
+  `device_lost` for leased devices that fail two checks. All mutation happens in `FarmStateStore.update` under an
+  exclusive `flock`, so concurrent `acquire` processes never share a device (unit test: 40 threads, 12 devices).
+* **Ports**: console 5554–5584 only (adb's scan range, 16 devices); allocation skips bound ports (any emulator)
+  and ports planned for other pools or ephemeral runs; `emuu run` allocates under `farm/ports.lock`.
+* **Capacity** (`CapacityGuard`, pure): ceiling = min(memory, CPU, ports); memory = (RAM − max(8 GiB, 40 %)) ÷
+  (guest RAM + 850 MiB); admission of one more device also needs macOS pressure normal and enough available
+  memory (`kern.memorystatus_level`). `emuu doctor` and `emuu farm capacity` print it.
+* **Health** (`HealthProber` → `HealthFacts` → `HealthEvaluator`, pure): process/SIGSTOP (Emuu's own freeze is
+  marked by `run/<id>.frozen`), console ping, `adb get-state`, one shell round trip (boot_completed, boot_id,
+  uptime, /data free), a system_server binder call, optional UI focus (ANR dialogs). A crash seen by any Emuu
+  process leaves `run/<id>.crashed` so a later `emuu health` still says `dead`. Farm devices compare the boot id
+  with the golden's (every clone resumes the golden's running kernel, so a different id means a guest reboot).
+* **Self-heal** (`SelfHealState`, pure): confirmations (2, dead: 1), exponential backoff (20 s doubling, max
+  10 min), circuit breaker (3 attempts / 30 min → failed). Ladders per fault (`HealLadder`); interactive
+  instances never restart automatically for informational faults (ANR dialog, disk full, completed reboot).
+  The supervisor runs it with `--self-heal`; `emuu heal` runs one ladder pass; the pool daemon for its devices.
 
 ## Security and safety
 

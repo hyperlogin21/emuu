@@ -9,6 +9,8 @@ import EmuuBase
 /// callers that size things from it (the governor's footprint budget) must read it after boot.
 public enum EngineEffectiveRAM {
     public static func megabytes(for config: InstanceConfig, paths: EmuuPaths) -> Int {
+        // `-qemu -m` overrides the engine's floor; hardware-qemu.ini still says 2048 then.
+        if config.isGuestRAMEnforced { return config.ramMB }
         let ini = paths.avdDirectory(for: config.id).appendingPathComponent("hardware-qemu.ini")
         guard let file = try? IniFile(contentsOf: ini), let value = file["hw.ramSize"],
               let mb = Int(value.trimmingCharacters(in: .whitespaces)) else {
