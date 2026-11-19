@@ -333,6 +333,15 @@ AVD tuning (EmuuEngine config generation):
   gives few frames but a correctly timed file; the last frame is repeated at the stop time), starts a new segment
   file when the frame size changes (rotation) and always finalizes. While recording the frame stream stays open
   and `DisplayActivityTracker` reports the instance as visible to the governor.
+* **Shared-memory frames are validated.** With `ImageTransport.MMAP` the engine has one region per stream and no
+  lock or sequence word; under host load the engine was seen writing into the region (bottom row first) while Emuu
+  read it, a few ms after sending the metadata, so Emuu read half-written frames (torn: an older band at the top, see
+  docs/evidence/flicker-*.png). `FrameConverter.convertStable` converts the region into the output buffer and then
+  compares the output with the region (channel-swapped, one pass, seqlock-style); a difference means a write
+  overlapped the read, so it re-reads (up to 3 times) or drops the frame. Counters: `DisplayStats.racedFrames` /
+  `unstableFrames`. Cost ≈ +0.5 ms per 720x1600 frame and ≈ +3.5 % of one core at 60 fps. It cannot detect an engine
+  writer that was paused mid-frame for the whole read-and-compare. `EMUU_DISPLAY_SHM_VALIDATE=0` turns it off
+  (diagnostics only).
 * **Rotation.** `setPhysicalModel(ROTATION)` turns the virtual device (sensors), with Android's auto-rotate set on
   attach; frames arrive rotated, the window re-aspects, and touches are mapped back to physical panel coordinates
   (`DeviceTouchMapper`). Portrait-locked apps (the phone launcher) appear sideways, as on a real phone.
@@ -340,6 +349,31 @@ AVD tuning (EmuuEngine config generation):
   stored as `InstanceConfig.automationMode`. `GuestEffector` always excludes packages with running
   instrumentation (`InstrumentationProbe`). `ADBActivityDetector` turns other tools' adb traffic (extra adbd
   children, guest pid rate) into "user activity".
+
+### Diagnosing display artefacts
+
+Tools (all off by default) for "the window flickers / tears / shows black frames":
+
+* **`emuu debug display-probe <instance> [--duration 60] [--save DIR] [--csv FILE]`** (hidden command) opens the
+  same frame stream the window uses (same session, transport and converter) and analyses every frame
+  (`Sources/EmuuDisplay/Diagnostics/FrameAnalyzer.swift`). Generic checks, for any content (e.g. TikTok):
+  **blank** (≥ 97 % black after a non-black frame), **green** (mostly pure green), **flash** (a frame unlike both
+  neighbours while they match each other: A-B-A), arrival gaps and late frames, engine→Emuu latency, read+convert
+  time. With the test pattern on screen it also reads a frame counter in five places: **torn** (two counters, each
+  in ≥ 2 markers), **out-of-order**, **pattern-lost**, duplicates and skipped counters. `--no-validate` reads the
+  shared memory the pre-fix way; `--transport inline` / `--compare-inline` add the engine's inline (atomic) frames
+  as ground truth (the same artefact in both = produced by the engine, only in mmap = Emuu's read);
+  `--tap-latency N` measures tap → first changed frame (turn on pointer location first:
+  `adb shell settings put system pointer_location 1`). PNGs of offending frames go to `--save`.
+* **`EMUU_DISPLAY_DIAG=1`** for the app (`EMUU_DISPLAY_DIAG=1 open -n dist/Emuu.app` does not pass the variable;
+  quit Emuu and run `EMUU_DISPLAY_DIAG=1 dist/Emuu.app/Contents/MacOS/Emuu` from a terminal instead) or `emuu start --window`: the window analyses
+  every frame it **presents** and logs a `display.diag` line every 10 s to `~/.emuu/logs/emuu.log` (presented,
+  coalesced, artefact counts, shared-memory races); offending frames are saved under `~/.emuu/logs/display-diag/`
+  (any other value is used as the directory). The stream then also stays open while the window is covered.
+* **Test content:** `scripts/flicker-test/` — `make-pattern-video.swift` (H.264/HEVC/VP9 via ffmpeg; `noise` for
+  realistic decoder load), the test APK in `apk/` (`VideoActivity`: MediaPlayer in a SurfaceView or TextureView,
+  full screen or in-feed, with animated UI over it; `GLActivity`: 60 fps GL pattern, `--ez upload true` for a
+  per-frame texture upload) and `run-scenarios.sh` (plays each scenario and runs the probe).
 
 
 ## Automation farm and self-healing (EmuuFarm, `emuu golden|clone|farm|run|health|heal|reboot`)

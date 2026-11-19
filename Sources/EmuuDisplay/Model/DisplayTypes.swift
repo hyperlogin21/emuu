@@ -83,6 +83,19 @@ public struct DisplayFrame: @unchecked Sendable {
     /// Monotonic host time the frame was received.
     public let receivedAt: ContinuousClock.Instant
     public let seq: UInt32
+    /// When the pixels were in the pooled buffer (receivedAt → convertedAt = Emuu's read/convert time).
+    public let convertedAt: ContinuousClock.Instant
+
+    public init(pixelBuffer: CVPixelBuffer, size: VideoSize, rotation: SkinRotation, deviceTimestampUs: UInt64,
+                receivedAt: ContinuousClock.Instant, seq: UInt32, convertedAt: ContinuousClock.Instant? = nil) {
+        self.pixelBuffer = pixelBuffer
+        self.size = size
+        self.rotation = rotation
+        self.deviceTimestampUs = deviceTimestampUs
+        self.receivedAt = receivedAt
+        self.seq = seq
+        self.convertedAt = convertedAt ?? receivedAt
+    }
 }
 
 /// Receives frames on the session's reader thread, in order. Must return quickly.
@@ -102,8 +115,14 @@ public struct DisplayStats: Sendable, Hashable {
     /// Frames received per second over the trailing window (0 while the guest screen is static).
     public var framesPerSecond: Double
     public var totalFrames: UInt64
-    /// Frames skipped because the renderer/recorder still held every pooled buffer.
+    /// Frames not delivered: the renderer/recorder still held every pooled buffer, or (MMAP) the engine kept
+    /// overwriting the region while it was read (`unstableFrames`).
     public var droppedFrames: UInt64
+    /// MMAP: frames whose shared-memory region changed while Emuu was copying it (the engine was already
+    /// writing the next frame). With validation these were re-read or dropped, never shown torn.
+    public var racedFrames: UInt64 = 0
+    /// MMAP: raced frames dropped because the region did not settle within the retry budget.
+    public var unstableFrames: UInt64 = 0
     /// Frame streams opened (start + every resume).
     public var streamsOpened: UInt64
     public var videoSize: VideoSize?

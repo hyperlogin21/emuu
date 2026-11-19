@@ -1,6 +1,7 @@
 import Foundation
 import EmuuBase
 import EmuuGRPC
+import CoreVideo
 
 /// The engine's own screen, input and clipboard over its gRPC `EmulatorController` service — the same
 /// mechanism Android Studio's embedded emulator uses.
@@ -19,13 +20,42 @@ import EmuuGRPC
 public actor EmulatorDisplaySession {
     public typealias EndpointProvider = @Sendable () async -> EmulatorGRPCEndpoint?
 
+    /// How frames travel from the engine and how they are read.
+    public struct FrameOptions: Sendable, Hashable {
+        public enum Transport: String, Sendable, Hashable, CaseIterable {
+            /// Pixels in a shared-memory region (≈100 bytes per frame on the socket). Default.
+            case mmap
+            /// Pixels inside each gRPC message (≈4.6 MB per 720x1600 frame; atomic, more CPU). Diagnostics.
+            case inline
+        }
+        public var transport: Transport
+        /// MMAP only: copy-then-compare so a frame the engine overwrites while it is being read is never shown
+        /// (see `FrameConverter.convertStable`). `false` reads the region directly (the pre-fix behaviour;
+        /// kept for `emuu debug display-probe --no-validate`).
+        public var validateSharedMemory: Bool
+
+        public init(transport: Transport = .mmap, validateSharedMemory: Bool = true) {
+            self.transport = transport
+            self.validateSharedMemory = validateSharedMemory
+        }
+
+        /// MMAP + validation, unless `EMUU_DISPLAY_SHM_VALIDATE=0` (diagnostics: measure the unvalidated path in the
+        /// real window).
+        public static var `default`: FrameOptions {
+            FrameOptions(validateSharedMemory: ProcessInfo.processInfo.environment["EMUU_DISPLAY_SHM_VALIDATE"] != "0")
+        }
+    }
+
     private let endpointProvider: EndpointProvider
     private let logger = EmuuLogger(category: "display.session")
     /// State shared with the reader thread and synchronous callers.
-    private let shared = SharedState()
+    private let shared: SharedState
+    public nonisolated let frameOptions: FrameOptions
 
-    public init(endpoint: @escaping EndpointProvider) {
+    public init(endpoint: @escaping EndpointProvider, frameOptions: FrameOptions = .default) {
         self.endpointProvider = endpoint
+        self.frameOptions = frameOptions
+        self.shared = SharedState(options: frameOptions)
     }
 
     // MARK: Observation
@@ -41,6 +71,12 @@ public actor EmulatorDisplaySession {
 
     public nonisolated func removeObserver(_ id: UUID) {
         shared.locked { $0.observers[id] = nil }
+    }
+
+    /// Diagnostics: called (reader thread) for every shared-memory race the validation detects, with the torn
+    /// copy. Set before `start()`. nil (default) costs nothing.
+    public nonisolated func setRaceObserver(_ observer: (@Sendable (FrameConverter.RaceInfo) -> Void)?) {
+        shared.setRaceObserver(observer)
     }
 
     /// Where frames go (display layer, recorder tee, capture). nil drops them without converting.
@@ -174,7 +210,9 @@ public actor EmulatorDisplaySession {
         do {
             let controller = try await connected()
             let side = shared.locked { s in max(s.physical?.width ?? 1080, s.physical?.height ?? 2400) }
-            let region = try shared.locked { s -> SharedMemoryRegion in
+            let inline = frameOptions.transport == .inline
+            let region = try shared.locked { s -> SharedMemoryRegion? in
+                if inline { return nil }
                 // Square region: frames are delivered already rotated (W×H or H×W), and the engine sizes its
                 // mapping from the requested width × height.
                 if let r = s.region, r.size >= side * side * 4 { return r }
@@ -188,7 +226,9 @@ public actor EmulatorDisplaySession {
                 return s.generation
             }
             let shared = self.shared
-            let format = EmulatorImageFormat(format: .rgba8888, width: side, height: side, mmapHandle: region.name)
+            // Inline: 0×0 asks for the native (rotated) size; MMAP needs an explicit size (0×0 crashed 36.4.9).
+            let format = inline ? EmulatorImageFormat(format: .rgba8888)
+                                : EmulatorImageFormat(format: .rgba8888, width: side, height: side, mmapHandle: region?.name)
             let handle = try controller.streamScreenshots(format, onImage: { image in
                 shared.handleFrame(image, generation: generation)
             }, onEnd: { [weak self] status in
@@ -311,6 +351,16 @@ final class SharedState: @unchecked Sendable {
     private var fields = Fields()
     /// Reader-thread only (one frame stream at a time).
     private let converter = FrameConverter()
+    private let options: EmulatorDisplaySession.FrameOptions
+
+    init(options: EmulatorDisplaySession.FrameOptions = .default) {
+        self.options = options
+    }
+
+    /// Set before the stream starts (the converter is reader-thread state).
+    func setRaceObserver(_ observer: (@Sendable (FrameConverter.RaceInfo) -> Void)?) {
+        converter.raceObserver = observer
+    }
 
     func locked<R>(_ body: (inout Fields) throws -> R) rethrows -> R {
         lock.lock()
@@ -337,8 +387,14 @@ final class SharedState: @unchecked Sendable {
         let receivedAt = ContinuousClock.now
         guard !image.isEmpty else { return }   // display off / not yet composed
         let w = image.width, h = image.height
-        let snapshot = locked { s -> (SharedMemoryRegion, (any DisplayFrameSink)?, Bool)? in
-            guard s.generation == generation, let region = s.region, w * h * 4 <= region.size else { return nil }
+        let inline = options.transport == .inline
+        let snapshot = locked { s -> (SharedMemoryRegion?, (any DisplayFrameSink)?, Bool)? in
+            guard s.generation == generation else { return nil }
+            if inline {
+                guard image.image.count >= w * h * 4 else { return nil }
+            } else {
+                guard let region = s.region, w * h * 4 <= region.size else { return nil }
+            }
             s.rate.record(receivedAt)
             s.stats.totalFrames &+= 1
             let size = VideoSize(width: w, height: h)
@@ -350,16 +406,44 @@ final class SharedState: @unchecked Sendable {
             }
             let changed = s.geometry.map { $0.0 != size || $0.1 != image.format.rotation } ?? true
             if changed { s.geometry = (size, image.format.rotation) }
-            return (region, s.sink, changed)
+            return (s.region, s.sink, changed)
         }
         guard let (region, sink, changed) = snapshot else { return }
         if changed { emit(.frameGeometryChanged(VideoSize(width: w, height: h), image.format.rotation)) }
         guard let sink else { return }
-        guard let buffer = converter.convert(rgba: region.base, width: w, height: h) else {
+        var attempts = 1
+        let buffer: CVPixelBuffer?
+        if inline {
+            buffer = image.image.withUnsafeBytes { converter.convert(rgba: $0.baseAddress!, width: w, height: h) }
+        } else if let region, options.validateSharedMemory {
+            if converter.raceObserver != nil {
+                let nowUs = UInt64(Date().timeIntervalSince1970 * 1_000_000)
+                let late = image.timestampUs > 0 && nowUs >= image.timestampUs ? Double(nowUs - image.timestampUs) / 1000 : -1
+                converter.raceContext = String(format: "seq %u, engine→read %.1f ms", image.seq, late)
+            }
+            switch converter.convertStable(rgba: region.base, width: w, height: h) {
+            case .frame(let b, let n):
+                buffer = b
+                attempts = n
+            case .poolExhausted:
+                buffer = nil
+            case .unstable(let n):
+                locked { $0.stats.racedFrames &+= 1; $0.stats.unstableFrames &+= 1; $0.stats.droppedFrames &+= 1 }
+                _ = n
+                return
+            }
+        } else if let region {
+            buffer = converter.convert(rgba: region.base, width: w, height: h)
+        } else {
+            buffer = nil
+        }
+        guard let buffer else {
             locked { $0.stats.droppedFrames &+= 1 }
             return
         }
+        if attempts > 1 { locked { $0.stats.racedFrames &+= 1 } }
         sink.consume(DisplayFrame(pixelBuffer: buffer, size: VideoSize(width: w, height: h), rotation: image.format.rotation,
-                                  deviceTimestampUs: image.timestampUs, receivedAt: receivedAt, seq: image.seq))
+                                  deviceTimestampUs: image.timestampUs, receivedAt: receivedAt, seq: image.seq,
+                                  convertedAt: .now))
     }
 }

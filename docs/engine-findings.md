@@ -196,6 +196,22 @@ below was checked against 36.4.9 with an isolated instance (lite, 720x1600) and 
   current (non-empty) clipboard immediately.
 * **Secure windows.** The host framebuffer contains `FLAG_SECURE` windows; `adb exec-out screencap` of the same moment
   is black (docs/evidence/secure-window-native.png vs secure-window-adb-screencap.png).
+* **The MMAP region is not synchronised (2026-11-19, display-flicker investigation).** One region per stream, no
+  lock, no sequence word in it. Under host load (8–10 threads of memcpy, or `swift build`) the engine was seen writing
+  into the region while Emuu was reading it, 3–340 ms after the frame's timestamp, **bottom row first** (rows
+  18…K changed between Emuu's read and its compare). In the window process (`emuu start --window`, 60 fps GL
+  pattern, ~6 000 frames per run) 24 such overlaps per run; about half of the reads were torn (top band from the
+  older frame, rest from the newer one, docs/evidence/flicker-torn-*.png); without validation 2 torn frames were
+  presented in one run, 0 in another. A plain CLI reader (`emuu debug display-probe`) saw none in ~40 000 frames,
+  with or without load. Inline transport (pixels in the message) is atomic but costs more (below). Emuu now
+  validates every MMAP read (ARCHITECTURE.md, "Shared-memory frames are validated").
+* **What was clean at the source.** With the test pattern (scripts/flicker-test) in H.264/HEVC/VP9, 720p/1080p,
+  30/60 fps, flat and high-bitrate noise, SurfaceView and TextureView (MediaPlayer → `c2.goldfish.*` host decoders,
+  HWC device composition), full screen, in-feed (scaled 0.6, UI animating on top) and letterboxed landscape, a 60 fps
+  GL scene and a per-frame 1080x1920 texture upload: 0 torn, 0 out-of-order, 0 blank/green, 0 A-B-A flashes in both
+  the MMAP and the inline stream (≈ 25 000 frames). Forcing GPU (client) composition (`service call SurfaceFlinger
+  1008 i32 1`) gave the same colours as HWC composition. Some frames are delivered twice/skipped by the guest
+  (TextureView 1080p60: 40 distinct frames/s of 60) — identical in MMAP and inline, so not Emuu.
 * **Engine cost.** 60 fps MMAP streaming added roughly 10 points of one host core to the QEMU process during
   continuous swipes (≈84 % without a client, ≈94–95 % with one); guest CPU unchanged (see BENCHMARKS.md).
 

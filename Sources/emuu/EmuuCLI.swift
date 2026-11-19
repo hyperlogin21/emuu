@@ -32,7 +32,7 @@ struct EmuuCLI: ParsableCommand {
             Keyboard.self, Automation.self,
             Health.self, Reboot.self, Heal.self,
             Golden.self, Clone.self, Farm.self, Run.self,
-            Logs.self, Mem.self, Bench.self, Paths.self,
+            Logs.self, Mem.self, Bench.self, Paths.self, Debug.self,
         ])
 
     /// Synchronous entry point so the main thread stays free: it parks in `dispatchMain()` (or, for
