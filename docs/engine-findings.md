@@ -321,6 +321,45 @@ Measured with a test app that logs key events and its text (scripts/typing-test-
   (device 0, bus 6), which Gboard does not treat as a physical keyboard. `accessibility_soft_keyboard_mode=1` is
   reset to 0 by the system immediately. BACK (evdev 158) while it is shown closes only the IME.
 
+## Camera (measured 2026-11-19, engine 36.4.9, android-36.1 Play Store image)
+
+Raw numbers: docs/evidence/camera-2026-11-19.txt. Android side checked with scripts/camera-test-apk (Camera2)
+and the stock Camera app; `dumpsys media.camera` for the device list.
+
+* **Modes the engine takes** (`-camera-back`/`-camera-front`, override `hw.camera.*` in config.ini; found with
+  `emulator -help-camera-back`, `strings` and a disassembly of `CameraService` in the headless binary):
+  `none`, `emulated` (guest EmulatedCamera HAL, up to 1920×1440), `virtualscene` (**back only**; front is rejected
+  although the error text lists it), `webcam<N>` (host AVFoundation; `-webcam-list` names them), and
+  `imagefile:<path>` (back) / `videofile:<path>` (both). `videoplayback` needs a feature and a dataset (Android
+  Studio's ARCore playback); not used. There is no `image360` in 36.4.9.
+* **`imagefile:` and `videofile:` are unusable here:** the camera is listed, `openCamera` succeeds, but
+  `createCaptureSession` never completes and cameraserver stays wedged ("Too many other clients connecting") until
+  the guest reboots — 4/4 with images (RGBA 960², RGB 1280×960 matching a frame size), 2/2 with an MP4, with our
+  app and with the stock Camera app. The engine logs nothing. Emuu does not offer them.
+* **Virtual scene:** a rendered room (`emulator/resources/Toren1BD.*`) at 1280×960 (sizes 176×144…1280×960), ~28
+  fps, sensor orientation 90. Two posters (`Toren1BD.posters`): `wall` 2 m square at (−0.807, 0.320, 5.316),
+  yaw −150°, and `table`. The console command `virtualscene-image wall|table [<png/jpg path>]` replaces a poster
+  at runtime (empty path = default; the path must not contain spaces); the call returns in ~1 ms and the next
+  rendered frame shows it. The scene camera follows the device's physical model: gRPC `setPhysicalModel`
+  POSITION (metres) and ROTATION (degrees) move it absolutely. A shelf hides the lower ~18 % of the poster's right
+  half when seen from the front, so Emuu uses the top 75 % square and stands 1.65 m away, 0.25 m higher and 0.11 m
+  to the side (the rendered poster is slightly off its listed centre). The app receives the picture rotated like
+  a real sensor (the stock app shows it upright).
+* **Swap time:** `emuu camera show` 143–165 ms wall (process start + image preparation + console + gRPC); the new
+  picture was decoded in the app's frames 109–161 ms after the command returned (upper bound incl. polling).
+  Poster sequences (`emuu camera play`) keep 10 fps with ≤ 1 ms per swap.
+* **Snapshots:** the snapshot's `hardware.ini` records `hw.camera.*`; launching with other cameras makes the
+  engine refuse it ("The emulator hardware cannot load snapshot") and cold-boot. A snapshot load restores the
+  device position/rotation (guest-visible sensors) but **not** the posters (host state): a shown picture survives
+  `avd snapshot load` unless cleared.
+* **Cost:** with no app using a camera, `virtualscene`+`emulated` cost nothing measurable against `none`+`none`
+  (two cold-boot rounds: footprint and idle CPU within run-to-run noise of ±200 MiB / ±3 % of a core). An app
+  streaming the virtual scene uses ~70 % of one core; after it closes the camera, CPU returns to idle.
+* **Host cameras / permission:** the engine (a child process) opens the Mac camera; macOS attributes it to the
+  responsible process (Emuu.app when the app started the engine, the terminal app for `emuu start` in a terminal).
+  Listing (`-webcam-list`, AVFoundation discovery) needs no permission and does not turn the camera on. Opening a
+  real webcam was **not** tested.
+
 ## Spontaneous guest restart after a quick-boot load (observed, cause open)
 
 * On `agent-test` (2026-11-19 00:09 UTC), a quick-boot resume restarted the guest kernel by itself ~2–8 s after

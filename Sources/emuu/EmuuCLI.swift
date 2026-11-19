@@ -29,7 +29,7 @@ struct EmuuCLI: ParsableCommand {
             Doctor.self, Create.self, List.self, Delete.self, Images.self,
             Start.self, Stop.self, Freeze.self, Thaw.self, Hibernate.self, Resume.self, Status.self,
             Install.self, Apps.self, Launch.self, Uninstall.self, Playstore.self, Screenshot.self, Record.self, Rotate.self, Shell.self,
-            Keyboard.self, Automation.self, VideoDecoder.self,
+            Keyboard.self, Automation.self, VideoDecoder.self, Camera.self,
             Health.self, Reboot.self, Heal.self,
             Golden.self, Clone.self, Farm.self, Run.self, CloneInstance.self,
             Logs.self, Mem.self, Bench.self, Paths.self, Debug.self,

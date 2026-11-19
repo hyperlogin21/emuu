@@ -26,6 +26,29 @@ Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub
 - **Not verified:** real TikTok on 35 (the actual point of the workaround), Google sign-in on 35, farm pools on 35,
   the create sheet on screen (screen locked; only built and unit-tested).
 
+## Status update (2026-11-19, camera support)
+
+- **Asked:** camera functions, mainly for automation (QR scans, photos, KYC capture) plus interactive use. Built on
+  branch `camera` (worktree `/Users/leslie/dev/emuu-camera`), tested only under a scratch `EMUU_HOME`, console 5578.
+- **Engine facts (36.4.9):** working modes `none`, `emulated` (up to 1920×1440), `virtualscene` (back only,
+  1280×960), `webcam<N>`. `imagefile:`/`videofile:` exist but hang Android's camera (cameraserver wedged until
+  reboot, 6/6); front `virtualscene` is rejected. Details: docs/engine-findings.md "Camera",
+  docs/evidence/camera-2026-11-19.txt.
+- **New:** per-instance `camera {back, front}` (`emuu camera status|set|list-host|show|play|clear|aim`,
+  `create --camera-back/--camera-front`, `EMUU_CAMERA_BACK/FRONT`, app Camera button + panel with Restart Device
+  Now, image drop on the panel). New instances: back `virtualscene`, front `emulated` (no permission, no idle
+  cost measured); existing instances keep none/none. A camera change cold-boots once (snapshot hardware
+  mismatch); farm clones keep the golden's cameras.
+- **Key feature:** `emuu camera show <name> <image>` shows any picture to the back camera without a restart
+  (virtual-scene wall poster swapped via console + device moved in front of it via gRPC): ~0.15 s per command,
+  visible in the next frames; a QR shown this way was decoded from frames captured by an Android Camera2 app
+  (10/10 swaps), and the stock Camera app shows pictures upright. `emuu camera play` = video as a poster sequence
+  (10 fps verified). Pool reset clears the picture and pose (live test `CameraResetLiveTests`).
+- **Not verified:** a real Mac camera end to end (listed only; never opened, so no macOS prompt was raised), the
+  app's camera panel on screen (built only; screen locked), the app's permission request, front-camera pictures
+  (impossible with this engine), a snapshot taken while an app had the camera open, a full `farm up` pool (the
+  farm's port plan would use console 5554; tested clone + reset pieces on 5578 instead).
+
 ## Status update (2026-11-19, clone an instance with its Google sign-in)
 
 - **Asked:** "If my Google Play is logged in on `phone`, allow me to clone `phone` so that the new simulator brings

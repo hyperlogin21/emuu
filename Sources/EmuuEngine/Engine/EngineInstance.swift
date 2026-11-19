@@ -182,18 +182,23 @@ public actor EngineInstance: EngineControl {
         if options.grpc, grpc == nil { log.warning("no free gRPC port in 8554…8999: the display needs one (engine starts without it)") }
         // The stored setting may have changed since this controller was created (app picker, `emuu video-decoder`).
         var latest = config
-        if let stored = try? InstanceStore.decode(paths.instanceConfigFile(for: instanceID)) { latest.videoDecoder = stored.videoDecoder }
+        if let stored = try? InstanceStore.decode(paths.instanceConfigFile(for: instanceID)) {
+            latest.videoDecoder = stored.videoDecoder
+            latest.camera = stored.camera
+        }
         let plan = Self.videoDecoderPlan(desired: latest.effectiveVideoDecoder(),
                                          snapshotCodecs: Self.readGuestCodecsMarker(avdDir),
                                          hasQuickBootSnapshot: Self.hasQuickBootSnapshot(snapshotsDirectory),
                                          coldBoot: options.coldBoot, isClone: config.goldenSource != nil)
         if let note = plan.note { log.notice("\(note)") }
+        let cameras = await cameraPlan(desired: options.cameraOverride ?? latest.effectiveCamera(), avdDir: avdDir,
+                                       coldBoot: plan.coldBoot)
         var launchOptions = options
-        launchOptions.coldBoot = plan.coldBoot
+        launchOptions.coldBoot = plan.coldBoot || cameras.coldBoot
         let args = EngineCommandLine.arguments(for: config, ports: chosen, grpcPort: grpc, options: launchOptions,
-                                               videoDecoder: plan.mode)
+                                               videoDecoder: plan.mode, cameras: (cameras.back, cameras.front))
         Self.writeGuestCodecsMarker(avdDir, plan.mode.usesHostCodecs ? .host : .guest)
-        Self.appendLogHeader(logURL, "emuu launch \(ISO8601DateFormatter().string(from: deps.clock.now())): emulator \(args.joined(separator: " ")) [video decoder: \(plan.mode.rawValue)]")
+        Self.appendLogHeader(logURL, "emuu launch \(ISO8601DateFormatter().string(from: deps.clock.now())): emulator \(args.joined(separator: " ")) [video decoder: \(plan.mode.rawValue), cameras: back=\(cameras.back) front=\(cameras.front)]")
         let request = ProcessRequest(executable: sdk.emulator, arguments: args,
                                      environment: EngineCommandLine.environment(paths: paths, sdk: sdk, videoDecoder: plan.mode),
                                      workingDirectory: paths.root, stdout: .file(logURL), stderr: .file(logURL))
@@ -407,6 +412,29 @@ public actor EngineInstance: EngineControl {
         }
         return (desired, true, "video decoder \(desired.rawValue): the quick-boot snapshot was saved with "
                 + "\(recorded == .host ? "host" : "guest software") decoders; cold boot")
+    }
+
+    // MARK: cameras vs. quick-boot snapshot
+
+    /// Camera flags for this launch (see `CameraLaunchPlan`). Mac cameras named by ID or name are looked up with
+    /// `emulator -webcam-list` (~0.1 s, opens no camera).
+    private func cameraPlan(desired: CameraConfig, avdDir: URL, coldBoot: Bool) async -> CameraLaunchPlan {
+        var hosts: [HostCamera]?
+        let byID = [desired.back, desired.front].contains { s in
+            if case .webcam(let id) = s { return !CameraSource.isEngineWebcamName(id) }
+            return false
+        }
+        if byID {
+            do { hosts = try await HostCameraList.query(sdk: sdk, runner: deps.runner) } catch {
+                log.warning("listing Mac cameras failed: \(error.localizedDescription)")
+                hosts = []
+            }
+        }
+        let plan = CameraLaunchPlan.make(desired: desired, hostCameras: hosts,
+                                         snapshot: Self.hasQuickBootSnapshot(snapshotsDirectory) ? CameraLaunchPlan.snapshotCameras(avdDirectory: avdDir) : nil,
+                                         coldBoot: coldBoot, isClone: config.goldenSource != nil)
+        for note in plan.notes { log.notice("\(note)") }
+        return plan
     }
 
     var snapshotsDirectory: URL { paths.avdDirectory(for: instanceID).appendingPathComponent("snapshots", isDirectory: true) }

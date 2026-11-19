@@ -197,13 +197,13 @@ final class InstanceSession: Identifiable {
             case .stopped, .hibernated, .crashed:
                 phase = .working(state == .hibernated ? "Resuming from hibernation…" : "Booting Android…")
                 startedEngine = true
-                try await engine.start(EngineLaunchOptions(coldBoot: coldBoot))
+                try await engine.start(await cameraLaunchOptions(coldBoot: coldBoot))
             case .stopping, .hibernating:
                 phase = .working("Waiting for the engine to finish \(state)…")
                 state = try await waitWhileTransitioning(engine)
                 if !state.isRunningEngine {
                     startedEngine = true
-                    try await engine.start(EngineLaunchOptions(coldBoot: coldBoot))
+                    try await engine.start(await cameraLaunchOptions(coldBoot: coldBoot))
                 }
             }
             try await buildPipeline(engine: engine)
@@ -479,13 +479,42 @@ final class InstanceSession: Identifiable {
             self.note(.action, state == .hibernated ? "Resuming from hibernation" : "Starting engine")
             let started = ContinuousClock.now
             do {
-                if coldBoot { try await engine.start(EngineLaunchOptions(coldBoot: true)) } else { try await engine.resume() }
+                let options = await self.cameraLaunchOptions(coldBoot: coldBoot)
+                if coldBoot || options.cameraOverride != nil { try await engine.start(options) } else { try await engine.resume() }
                 self.note(.info, "Engine ready in \(Self.format(ContinuousClock.now - started))")
                 try await self.buildPipeline(engine: engine)
             } catch {
                 self.fail(error)
             }
         }
+    }
+
+    // MARK: Camera
+
+    /// The engine environment and controller, for the camera panel (`CameraPanelModel`).
+    var engineEnvironment: EngineEnvironment { env }
+    var engineController: EngineInstance? { engine }
+
+    /// Launch options for an engine this window starts. When the instance uses a Mac camera, asks macOS for camera
+    /// access first (the engine is a child of the app, so the app's permission applies to it); if access is denied,
+    /// those cameras run as Emulated for this launch and a note explains how to allow it.
+    func cameraLaunchOptions(coldBoot: Bool) async -> EngineLaunchOptions {
+        var options = EngineLaunchOptions(coldBoot: coldBoot)
+        let stored = (try? env.store.load(id))?.effectiveCamera() ?? config.effectiveCamera()
+        let decision = await CameraAccess.decide(for: stored)
+        if let override = decision.override { options.cameraOverride = override }
+        if let message = decision.message {
+            note(.info, message)
+            showToast(message)
+        }
+        return options
+    }
+
+    /// Restarts the engine so changed camera hardware takes effect (hibernate + start; the start cold-boots once
+    /// because the snapshot has the old cameras). The window stays open.
+    func restartForCameraChange() {
+        note(.action, "Restarting the device for the camera change (one cold boot)")
+        restartEngineForDisplay()
     }
 
     /// User input → `touch` for a CLI supervisor (at most every 20 s).

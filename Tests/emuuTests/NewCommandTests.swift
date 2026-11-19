@@ -70,3 +70,35 @@ import EmuuMemory
         #expect(start.videoDecoder == .software)
     }
 }
+
+@Suite struct CameraCommandTests {
+    @Test func cameraSubcommandsParse() throws {
+        let set = try #require(try EmuuCLI.parseAsRoot(["camera", "set", "phone", "--back", "virtualscene", "--front", "webcam:FaceTime HD"]) as? CameraSet)
+        #expect(set.instance == "phone" && set.back == .virtualScene && set.front == .webcam("FaceTime HD"))
+        #expect(throws: (any Error).self) { try EmuuCLI.parseAsRoot(["camera", "set", "phone"]) }
+        #expect(throws: (any Error).self) { try EmuuCLI.parseAsRoot(["camera", "set", "phone", "--front", "virtualscene"]) }
+        #expect(throws: (any Error).self) { try EmuuCLI.parseAsRoot(["camera", "set", "phone", "--back", "imagefile:/x.png"]) }
+        let show = try #require(try EmuuCLI.parseAsRoot(["camera", "show", "phone", "qr.png", "--json"]) as? CameraShow)
+        #expect(CameraCLI.instanceAndFile(show.args)! == ("phone", "qr.png") && show.json)
+        let only = try #require(try EmuuCLI.parseAsRoot(["camera", "show", "qr.png"]) as? CameraShow)
+        #expect(CameraCLI.instanceAndFile(only.args)!.instance == nil)
+        #expect(throws: (any Error).self) { try EmuuCLI.parseAsRoot(["camera", "show", "phone", "qr.png", "--front"]) }
+        #expect(throws: (any Error).self) { try EmuuCLI.parseAsRoot(["camera", "show"]) }
+        _ = try #require(try EmuuCLI.parseAsRoot(["camera", "status", "phone", "--json"]) as? CameraStatus)
+        _ = try #require(try EmuuCLI.parseAsRoot(["camera", "clear", "phone"]) as? CameraClear)
+        _ = try #require(try EmuuCLI.parseAsRoot(["camera", "list-host", "--json"]) as? CameraListHost)
+        let aim = try #require(try EmuuCLI.parseAsRoot(["camera", "aim", "phone", "--position", "1,2.5,-3"]) as? CameraAim)
+        #expect(try CameraAim.triple(aim.position!) == [1, 2.5, -3])
+        #expect(throws: (any Error).self) { try EmuuCLI.parseAsRoot(["camera", "aim", "--rotation", "1,2"]) }
+    }
+
+    @Test func createCameraOptions() throws {
+        let c = try #require(try EmuuCLI.parseAsRoot(["create", "phone", "--camera-back", "emulated", "--camera-front", "none"]) as? Create)
+        let config = try c.makeConfig(id: InstanceID(rawValue: "phone")!, image: .playStoreDefault)
+        #expect(config.camera == CameraConfig(back: .emulated, front: .none))
+        let plain = try #require(try EmuuCLI.parseAsRoot(["create", "phone"]) as? Create)
+        #expect(try plain.makeConfig(id: InstanceID(rawValue: "phone")!, image: .playStoreDefault).camera == .newInstanceDefault)
+        let bad = try #require(try EmuuCLI.parseAsRoot(["create", "phone", "--camera-front", "virtualscene"]) as? Create)
+        #expect(throws: (any Error).self) { try bad.makeConfig(id: InstanceID(rawValue: "phone")!, image: .playStoreDefault) }
+    }
+}

@@ -27,10 +27,15 @@ public struct EngineLaunchOptions: Sendable, Hashable {
     /// Start the gRPC display/input service (`-grpc`). An idle listener costs nothing measurable; farm devices keep
     /// it so `emuu screenshot` and the app can still show them.
     public var grpc: Bool
+    /// Cameras for this launch instead of the stored setting (the app uses it when macOS camera access was denied
+    /// for a Mac camera). nil = the instance's setting.
+    public var cameraOverride: CameraConfig?
 
     public init(coldBoot: Bool = false, bootTimeout: Duration = .seconds(600), netfast: Bool = true,
-                extraArguments: [String] = [], qemuArguments: [String] = [], grpc: Bool = true) {
+                extraArguments: [String] = [], qemuArguments: [String] = [], grpc: Bool = true,
+                cameraOverride: CameraConfig? = nil) {
         self.grpc = grpc
+        self.cameraOverride = cameraOverride
         self.coldBoot = coldBoot
         self.bootTimeout = bootTimeout
         self.netfast = netfast
@@ -46,7 +51,8 @@ public enum EngineCommandLine {
     ///   writes to its discovery file (`~/Library/Caches/TemporaryItems/avd/running/pid_<pid>.ini`, user-only).
     public static func arguments(for config: InstanceConfig, ports: InstancePorts, grpcPort: Int? = nil,
                                  options: EngineLaunchOptions,
-                                 videoDecoder: VideoDecoderMode? = nil) -> [String] {
+                                 videoDecoder: VideoDecoderMode? = nil,
+                                 cameras: (back: String, front: String)? = nil) -> [String] {
         var args = [
             "-avd", config.id.rawValue,
             "-no-window",                       // runs qemu-system-aarch64-headless: no Qt, no window
@@ -62,6 +68,7 @@ public enum EngineCommandLine {
         if !config.audioOutput { args.append("-no-audio") }
         if options.coldBoot { args.append("-no-snapshot-load") }
         if config.discardStateOnExit == true { args.append("-no-snapshot-save") }
+        args += cameraArguments(cameras ?? defaultCameraValues(options.cameraOverride ?? config.effectiveCamera()))
         args += videoDecoderArguments(videoDecoder ?? config.effectiveVideoDecoder())
         args += options.extraArguments
         var qemu = options.qemuArguments
@@ -76,6 +83,21 @@ public enum EngineCommandLine {
     /// Android falls back to its own `c2.android.*` decoders.
     public static func videoDecoderArguments(_ mode: VideoDecoderMode) -> [String] {
         mode.resolved == .software ? ["-feature", "-HardwareDecoder"] : []
+    }
+
+    /// `-camera-back` / `-camera-front` for engine values (`none`, `emulated`, `virtualscene`, `webcamN`). Values
+    /// equal to config.ini's (`none`, which Emuu always writes there) are left out.
+    public static func cameraArguments(_ cameras: (back: String, front: String)) -> [String] {
+        var args: [String] = []
+        if cameras.back != "none" { args += ["-camera-back", cameras.back] }
+        if cameras.front != "none" { args += ["-camera-front", cameras.front] }
+        return args
+    }
+
+    /// Engine values without host lookups (a Mac camera named by ID or name is kept as given; `EngineInstance`
+    /// resolves those through `HostCameraList` before launching).
+    static func defaultCameraValues(_ c: CameraConfig) -> (back: String, front: String) {
+        (HostCameraList.engineValue(c.back, hostCameras: nil) ?? "none", HostCameraList.engineValue(c.front, hostCameras: nil) ?? "none")
     }
 
     /// Environment variable the engine reads when a host decoder is created (36.4.9: only the exact value "0"

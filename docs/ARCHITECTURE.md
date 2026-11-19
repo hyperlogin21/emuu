@@ -70,7 +70,7 @@ mode** (strict concurrency). It targets macOS 14 on arm64.
 | --- | --- | --- | --- |
 | `EmuuBase` | library | – | models, protocols, ProcessRunner, logging, paths, clock |
 | `EmuuTestSupport` | library | EmuuBase | fakes for tests (`FakeProcessRunner`, `FakeSpawnedProcess`, `FakeClock`, `FakeDeviceShell`, `FakeEngineControl`) |
-| `EmuuEngine` | library | EmuuBase | SDK locator, instance store, AVD config generation, launcher/lifecycle, console client, `EngineControl` impl |
+| `EmuuEngine` | library | EmuuBase, EmuuGRPC | SDK locator, instance store, AVD config generation, launcher/lifecycle, console client, `EngineControl` impl, camera launch plan + virtual scene control (aims via gRPC) |
 | `EmuuADB` | library | EmuuBase | adb client, `DeviceShell` impl, APK/split/XAPK/APKS/APKM install, package mgmt, Play Store helpers |
 | `EmuuMemory` | library | EmuuBase | guest/host samplers, governor policy, effectors, maintenance, creep detection |
 | `CEmuuShim` | C library | – | `shm_open` wrapper (variadic in C) |
@@ -460,6 +460,38 @@ Tools (all off by default) for "the window flickers / tears / shows black frames
 * `EngineInstance` re-reads the stored setting at every launch, so a change from the app's picker (memory HUD) or
   the CLI applies at the next start/resume without recreating the controller.
 
+
+### Camera (`InstanceConfig.camera`, `emuu camera`, strip Camera button)
+
+```
+ setting (instance JSON camera {back, front}; nil = none/none) ─┐
+ EMUU_CAMERA_BACK / EMUU_CAMERA_FRONT (override) ───────────────┼─ effectiveCamera ─ CameraLaunchPlan ─ -camera-back/-front
+ app: CameraAccess (Mac camera permission) → cameraOverride ────┘   (webcam by name/ID → webcamN via -webcam-list;
+ snapshots/default_boot/hardware.ini hw.camera.* ───────────────────  snapshot mismatch → cold boot, clone → keep golden's)
+
+ emuu camera show / app panel ─ PosterImage (letterbox into the poster's top 75 %) ─ console virtualscene-image wall <png>
+                                                              └─ gRPC setPhysicalModel POSITION+ROTATION (aimPose)
+ farm reset (LiveFarmDriver.reset) ─ snapshot load ─ VirtualSceneCamera.clear (default posters, start pose)
+```
+
+* Model: `Sources/EmuuBase/Models/Camera.swift` (`CameraSource`: none, emulated, virtualScene, webcam(id);
+  `CameraConfig`; new instances get `newInstanceDefault` = virtualscene/emulated in `InstanceConfig.init`, records
+  without the key decode as nil = none/none so existing instances and their snapshots are unchanged).
+* Launch: `EmuuEngine/Camera/CameraLaunchPlan.swift`. The engine itself refuses a snapshot with other `hw.camera.*`
+  and cold-boots; Emuu reads the snapshot's `hardware.ini` and passes `-no-snapshot-load` explicitly (logged), or,
+  for farm clones (`goldenSource`), launches with the golden's cameras so the clone still resumes in ~2 s.
+  `config.ini` keeps `hw.camera.* = none`; only non-`none` values become flags. `EngineInstance` re-reads the stored
+  setting at every launch (like the video decoder). A Mac camera named by unique ID or name is resolved with
+  `emulator -webcam-list` (~0.1 s); a missing one starts as `none` with a note.
+* Picture: `EmuuEngine/Camera/VirtualSceneCamera.swift` (needs EmuuGRPC, hence the EmuuEngine → EmuuGRPC
+  dependency). Poster files go to `<EMUU_HOME>/run/camera/<id>/` (temp dir if that path has spaces), one new name
+  per call, older ones pruned. `<run>/<id>.camera.json` records the shown picture for the current engine pid
+  (status in CLI and app). `play` = poster sequence (AVAssetImageGenerator frames), because `videofile:` hangs the
+  guest HAL.
+* App: `Views/CameraPanelView.swift` (`CameraPanelModel`), `Support/CameraAccess.swift`; the session asks for
+  camera access in `cameraLaunchOptions` before it starts an engine with a Mac camera and falls back to emulated
+  when denied; "Restart Device Now" = `restartEngineForDisplay` (hibernate + start, window stays open). Info.plist
+  has `NSCameraUsageDescription`; the app is not sandboxed and has no hardened runtime, so no entitlement is needed.
 
 ## Automation farm and self-healing (EmuuFarm, `emuu golden|clone|farm|run|health|heal|reboot`)
 

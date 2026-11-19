@@ -208,6 +208,7 @@ final class LocalLineServer: @unchecked Sendable {
     @Test func headlessArgumentsFromConfig() throws {
         var config = InstancePreset.standard.makeConfig(id: InstanceID(rawValue: "emuu-dev")!)
         config.videoDecoder = .hardware   // the engine default: no decoder flags
+        config.camera = .off              // config.ini's value: no camera flags (CameraTests covers them)
         let ports = try InstancePorts(console: 5580)
         var args = EngineCommandLine.arguments(for: config, ports: ports, options: EngineLaunchOptions(), videoDecoder: .hardware)
         #expect(args == ["-avd", "emuu-dev", "-no-window", "-no-boot-anim", "-ports", "5580,5581", "-gpu", "host",

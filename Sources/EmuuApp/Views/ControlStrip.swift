@@ -36,6 +36,9 @@ struct ControlStrip: View {
                     StripButton(icon: "screenshot", fallback: "camera", label: "Screenshot to clipboard and ~/.emuu/screenshots",
                                 shortcut: "⇧⌘S") { Task { await session.takeScreenshot() } }
                     RecordButton(session: session)
+                    StripButton(icon: "camera", fallback: "video", label: "Camera: back/front source, show a picture to the back camera",
+                                isOn: ui.showCamera) { ui.showCamera.toggle() }
+                        .popover(isPresented: $ui.showCamera, arrowEdge: .leading) { CameraPanelView(session: session) }
                 }
                 StripDivider()
                 group {

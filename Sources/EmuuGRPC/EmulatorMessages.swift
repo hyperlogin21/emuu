@@ -316,3 +316,43 @@ enum EmulatorClipData {
         return text
     }
 }
+
+/// `PhysicalModelValue` for any target (`PhysicalType`: POSITION = 0 in metres, ROTATION = 1 in degrees, …).
+/// The virtual scene camera follows the device's POSITION and ROTATION (verified on 36.4.9; see
+/// docs/engine-findings.md, "Camera").
+public struct EmulatorPhysicalValue: Sendable, Hashable {
+    public static let position = 0
+    public static let rotation = 1
+
+    public var target: Int
+    public var values: [Float]
+
+    public init(target: Int, values: [Float]) {
+        self.target = target
+        self.values = values
+    }
+
+    public func encoded() -> [UInt8] {
+        var w = ProtoWriter()
+        if target != 0 { w.int(1, Int64(target)) }
+        let v = values
+        w.message(3) { p in p.packedFloats(1, v) }
+        return w.bytes
+    }
+
+    /// Request for `getPhysicalModel`: only the target.
+    public static func query(_ target: Int) -> [UInt8] {
+        var w = ProtoWriter()
+        if target != 0 { w.int(1, Int64(target)) }
+        return w.bytes
+    }
+
+    public static func decode(_ data: ArraySlice<UInt8>, target: Int) throws -> EmulatorPhysicalValue {
+        var values: [Float] = []
+        try ProtoReader.forEach(data) { f, v in
+            guard f == 3 else { return }
+            try ProtoReader.forEach(v.slice) { pf, pv in if pf == 1 { values += ProtoReader.floats(pv) } }
+        }
+        return EmulatorPhysicalValue(target: target, values: values)
+    }
+}

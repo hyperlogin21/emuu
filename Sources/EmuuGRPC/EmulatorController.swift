@@ -130,4 +130,15 @@ public final class EmulatorController: @unchecked Sendable {
         w.int(1, 1)
         return try EmulatorRotationValue.decode(try await channel.unary(Self.service + "getPhysicalModel", w.bytes)[...])
     }
+
+    /// Sets one physical-model value (absolute; the engine interpolates towards it). POSITION moves the device
+    /// (and the virtual scene camera) in metres, ROTATION turns it (degrees about x, y, z).
+    public func setPhysicalModel(_ value: EmulatorPhysicalValue) async throws {
+        _ = try await channel.unary(Self.service + "setPhysicalModel", value.encoded())
+    }
+
+    public func physicalModel(_ target: Int) async throws -> EmulatorPhysicalValue {
+        try EmulatorPhysicalValue.decode(try await channel.unary(Self.service + "getPhysicalModel",
+                                                                 EmulatorPhysicalValue.query(target))[...], target: target)
+    }
 }

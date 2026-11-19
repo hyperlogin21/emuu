@@ -10,6 +10,7 @@ import EmuuDisplay
 final class WindowUIState {
     var showApps = false
     var showHUD = false
+    var showCamera = false
     /// A file drag hovers over the window (SwiftUI area or the display view).
     var dropTargeted = false
 }

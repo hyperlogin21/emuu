@@ -16,3 +16,4 @@ scripts/secure-test-apk/build/
 /dist/
 /*.raw
 scripts/flicker-test/apk/build/
+scripts/camera-test-apk/build/
