@@ -1,0 +1,54 @@
+Camera measurements, 2026-11-19. Engine 36.4.9 (qemu-system-aarch64-headless), android-36.1 google_apis_playstore
+arm64, gpu host, 2048 MB / 4 vCPUs, isolated EMUU_HOME, console 5578. Another agent's emulator ran at the same time
+(CPU numbers are noisy). Android-side capture: scripts/camera-test-apk (Camera2, YUV_420_888 ImageReader at the
+largest size + TextureView preview, newest frame written as JPEG every 40-250 ms); host decode: CIDetector QR.
+
+Modes (engine flags; `dumpsys media.camera` + a captured frame):
+  -camera-back virtualscene     2 devices (ids 10 = back, ranchu HAL), frames 1280x960 (sizes 176x144…1280x960), ~28 fps
+  -camera-front emulated        id 1 front (EmulatedCamera HAL), frames 1920x1440 (up to), ~25 fps
+  -camera-back emulated         1 device, back, frames 1856x1392
+  -camera-back imagefile:<png>  device listed; createCaptureSession never completes, cameraserver wedged
+                                ("Too many other clients connecting") until reboot. Own app and stock Camera2: 4/4.
+                                Tried RGBA 960x960 and RGB 1280x960 PNG (matching a frame size). Same for
+                                -camera-front videofile:<mp4> (2/2).
+  -camera-front virtualscene    engine exits: "Invalid value for -camera-front <mode> parameter: virtualscene"
+  webcam0                       listed by `emulator -webcam-list` (MacBook Pro Camera, YV12); NOT opened.
+
+Snapshot vs camera hardware:
+  snapshot saved with back=none front=none, launched with back=virtualscene front=emulated:
+    "ERROR | The emulator hardware cannot load snapshot: default_boot" -> cold boot, guest lists 2 cameras.
+  Emuu now passes -no-snapshot-load itself in that case: `camera set cam2 --back emulated --front none`, stop,
+    start -> log "cameras back=emulated front=none requested, the quick-boot snapshot has back=virtualscene
+    front=emulated: cold boot", start 10.7 s, guest: 1 camera, back.
+  matching snapshot (virtualscene/emulated): "Successfully loaded snapshot 'default_boot' using 1051 ms",
+    camera works after the quick boot (QR decoded).
+  farm-style clone (goldenSource set, setting back=none, golden snapshot virtualscene): launched with the golden's
+    cameras, "Successfully loaded snapshot 'default_boot' using 552 ms", QR decoded on the clone.
+
+Picture swap (`emuu camera show`, console `virtualscene-image wall <png>` + gRPC setPhysicalModel):
+  console swap call 1 ms; `emuu camera show` wall time 143-165 ms (10 runs, incl. process start, image
+  preparation 20-90 ms); new QR decoded in the app's frames 109-161 ms after the command returned
+  (upper bound: includes the app's 40 ms write interval, JPEG encode, adb pull + decode per poll).
+  qr1 -> qr2 -> qr1 … 10 swaps: 10/10 decoded the expected code.
+  `emuu camera play cam2 qrvid.mp4 --fps 10`: 61 frames at 10.0 fps, console swap median 0 ms, max 1 ms;
+  frames sampled every 0.5 s showed QR-ONE for the first 3 s of video and QR-TWO for the last 3 s.
+Geometry: wall poster 2 m square at (-0.807, 0.320, 5.316), yaw -150 (Toren1BD.posters). A shelf hides the
+  lower ~18 % of the poster's right half from the front, so the picture goes into the top 75 % square; camera at
+  1.65 m, lifted 0.25 m, 0.11 m sideways correction. Raw frame: picture centred (text centre at y 486 of 960).
+State across a snapshot load (console `avd snapshot load`): device position/rotation return to the snapshot's
+  (camera points at the room again), the wall poster keeps the shown picture (host state). Farm reset therefore
+  clears it: live test EMUU_CAMERA_LIVE_INSTANCE=cam3 swift test --filter CameraResetLive -> passed, reset incl.
+  camera clear 2.0 s; afterwards aiming at the poster shows the default grid (camera-after-farm-reset.png).
+
+Idle cost (cold boot, 150 s settle, then 60 s window; phys_footprint and CPU of the engine process):
+  round  cameras                 idle footprint  idle CPU   streaming CPU (10 s)  after use (60 s)
+  1      none/none               4226 MiB        7.2 %      (no camera)           4186 MiB 12.3 %
+  1      virtualscene/emulated   4015 MiB        6.0 %      67.1 %                4180 MiB 10.6 %
+  2      none/none               4261 MiB        4.8 %      (no camera)           4225 MiB 11.2 %
+  2      virtualscene/emulated   4189 MiB        8.2 %      77.2 %                4344 MiB 10.7 %
+  -> idle: no difference beyond run-to-run noise (±200 MiB, ±3 % of a core). Streaming the virtual scene:
+     ~70 % of one core. After the camera was closed: CPU back to idle; footprint within noise (+0…120 MiB).
+
+Evidence images: camera-qr-frame.png (raw 1280x960 frame captured by the Android app, decodes
+EMUU-CAMERA-QR-TWO), camera-idcard-stock-app.png (stock Camera app, back camera, upright), camera-emulated.png,
+camera-virtualscene-default.png, camera-after-farm-reset.png.

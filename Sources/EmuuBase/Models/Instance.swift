@@ -267,6 +267,9 @@ public struct InstanceConfig: Codable, Sendable, Hashable {
     /// Where guest video is decoded. nil (older configs) = `.auto`, so existing instances follow Emuu's default
     /// without being recreated (the first start after a change cold-boots once; see `EngineInstance`).
     public var videoDecoder: VideoDecoderMode?
+    /// Back/front camera hardware (see `CameraConfig`). nil (records from before camera support) = no cameras;
+    /// new instances get `CameraConfig.newInstanceDefault`.
+    public var camera: CameraConfig?
 
     /// `automationMode` with its default applied.
     public var isAutomationMode: Bool { automationMode ?? false }
@@ -314,6 +317,7 @@ public struct InstanceConfig: Codable, Sendable, Hashable {
         self.gpu = gpu
         self.audioOutput = audioOutput
         self.createdAt = createdAt
+        self.camera = .newInstanceDefault
     }
 
     public static let ramRangeMB = 1024...8192
@@ -338,6 +342,7 @@ public struct InstanceConfig: Codable, Sendable, Hashable {
         }
         if !Self.densityRange.contains(display.density) { problems.append("density \(display.density) not in \(Self.densityRange)") }
         if displayName.trimmingCharacters(in: .whitespaces).isEmpty { problems.append("displayName is empty") }
+        problems += cameraConfig.problems
         if !problems.isEmpty { throw EmuuError.invalidConfiguration(problems.joined(separator: "; ")) }
     }
 }

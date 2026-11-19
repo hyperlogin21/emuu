@@ -19,8 +19,8 @@ steady over long sessions:
   not blacked out. Without a window the engine runs fully headless.
 * **A memory governor** that watches the guest and the Mac and steps in through escalating tiers, from asking
   apps to trim up to hibernating the whole VM. See [Memory governor](#memory-governor) below.
-* **Tuned instances.** Emuu creates its own AVDs: no boot animation, no microphone, unused sensors and
-  cameras off, a smaller default screen (720x1600), and quick-boot snapshots kept for 2-second resumes.
+* **Tuned instances.** Emuu creates its own AVDs: no boot animation, no microphone, unused sensors
+  off, cheap cameras that need no permission (see [Camera](#camera)), a smaller default screen (720x1600), and quick-boot snapshots kept for 2-second resumes.
 
 Honest limits:
 
@@ -37,8 +37,9 @@ Honest limits:
 * **Memory cannot be handed back from a running guest.** This image's kernel has no virtio-balloon driver,
   so the governor's "reclaim" tier reports `unsupported`. The way to get memory back is **hibernate**: it
   saves the VM and quits in about 2 s, frees everything, and resumes in about 2 s.
-* The display carries no audio (sound is the engine's own audio output; `create --no-audio` turns it off), and
-  there is no camera.
+* The display carries no audio (sound is the engine's own audio output; `create --no-audio` turns it off).
+* Cameras: the back camera can show any picture or video you choose (virtual scene); the front camera can be the
+  emulated test pattern or a Mac camera, but cannot show a chosen picture (engine limit).
 * Characters Android's hardware keyboard cannot type (é, ü, 中文, emoji) reach the device through its clipboard
   (see [Typing](#typing)); a few Mac keys have no Android equivalent on the emulator's keyboard (F-keys, Insert).
 
@@ -88,7 +89,7 @@ With exactly one instance you can leave out the name. Otherwise use `-i <name>`,
 | Command | What it does |
 | --- | --- |
 | `doctor` | Host, SDK, engine, Play Store image and adb checks, with fix commands (`--json`). |
-| `create <name>` | New instance. `--preset standard\|lite\|gaming`; overrides: `--ram`, `--cores`, `--screen 1080x2400@420`, `--gpu`, `--no-audio`, `--port` (console port 5554–5584: adb only finds emulators there), `--profile`, `--video-decoder`. |
+| `create <name>` | New instance. `--preset standard\|lite\|gaming`; overrides: `--ram`, `--cores`, `--screen 1080x2400@420`, `--gpu`, `--no-audio`, `--port` (console port 5554–5584: adb only finds emulators there), `--profile`, `--video-decoder`, `--camera-back`, `--camera-front`. |
 | `list`, `delete <name>` | List instances; delete one with all its data (`-y` to skip the prompt). |
 | `start` | Boot and supervise. `--headless` (default) or `--window`; `--detach`; `--profile lite\|balanced\|performance`; `--cold-boot`; `--no-governor`; `--idle-freeze <min>`; `--automation`; `--video-decoder <mode>` (saved). |
 | `stop`, `freeze`, `thaw`, `hibernate`, `resume` | Lifecycle. These go through the supervisor when one runs. `stop --no-snapshot` cold-boots next time; `stop --force` sends SIGKILL. |
@@ -102,6 +103,7 @@ With exactly one instance you can leave out the name. Otherwise use `-i <name>`,
 | `keyboard on\|off\|status [<name>]` | Android's on-screen keyboard (saved per instance; same as the app's Keyboard button). |
 | `automation on\|off\|status [<name>]` | Automation mode for tests/scripts over adb (see [adb and automation](#adb-and-automation)). |
 | `video-decoder auto\|software\|hardware\|host-software\|status [<name>]` | Where guest video is decoded (saved per instance; see [Video decoding](#video-decoding)). |
+| `camera status\|set\|show\|play\|clear\|aim\|list-host` | Cameras (saved per instance) and showing a picture or video to the back camera (see [Camera](#camera)). |
 | `shell [-- cmd…]` | `adb shell` on the instance (interactive without a command). |
 | `logs` | Engine log (default), `--supervisor`, `--app`, or `--samples` (the governor's CSV); `-f` follows. |
 | `mem` | Live governor view (`--json`, `--once`, `--apps` for a per-app breakdown). `mem trim [--kill] [--level …]`, `mem reclaim`. |
@@ -555,6 +557,78 @@ to change them. Measurements: docs/engine-findings.md, "Video decoding".
 
 **Green video area (e.g. TikTok)?** `emuu video-decoder status <name>` shows which decoders the running guest
 uses. With host decoders, switch: `emuu video-decoder software <name>`, then stop and start the instance.
+
+## Camera
+
+Each instance has a back and a front camera (`emuu camera`, `create --camera-back/--camera-front`, the window's
+Camera button):
+
+| Source | Back | Front | What the app sees |
+| --- | --- | --- | --- |
+| `virtualscene` | **default** | – | A rendered room; its wall poster shows any picture you choose (`emuu camera show`). 1280×960 (also 640×480 … 176×144). |
+| `emulated` | yes | **default** | Android's software test camera (a moving cartoon scene), up to 1920×1440. |
+| `webcam0`, `webcam:"<name>"` | yes | yes | A Mac camera (`emuu camera list-host`). Needs macOS camera permission (see below). |
+| `none` | yes | yes | Android has no such camera. Instances created before camera support keep `none`/`none`. |
+
+Neither default needs a permission, and while no app has a camera open they cost nothing measurable (same idle
+memory and CPU as no cameras; an app streaming the virtual scene uses about 70 % of one core). Android lists its
+cameras when it boots, so **changing a camera applies at the next start, which cold-boots once** (apps and data
+stay). `EMUU_CAMERA_BACK` / `EMUU_CAMERA_FRONT` override every instance for one command or app launch.
+
+**Showing a picture (the automation feature).** With the back camera on `virtualscene`, a test can put any image
+in front of the camera at any time, with no restart:
+
+```bash
+emuu camera show phone qr.png          # ~0.15 s for the command; the next camera frame shows it
+adb -s emulator-5554 shell am start -n com.example/.ScanActivity
+emuu camera show phone id-card.jpg     # swap to another picture while the scanner keeps running
+emuu camera play phone selfie.mov --fps 10   # a video, frame by frame (or a folder of images)
+emuu camera clear phone                # the default room again
+emuu camera status phone --json        # setting, what the running engine has, shown picture
+```
+
+The picture keeps its aspect ratio and is centred in the frame as a real phone would see a sheet held in front
+of it (the app gets the usual 90°-rotated sensor image; the stock camera app shows it upright, see
+`docs/evidence/camera-idcard-stock-app.png`). A QR code shown this way is decoded from the frames an Android app
+captures (`docs/evidence/camera-qr-frame.png`). Only the back camera can show a picture: the engine has no picture
+source for the front camera (its own `imagefile:`/`videofile:` modes exist but hang Android's camera on engine
+36.4.9, so Emuu does not offer them). `show` moves the virtual device in front of the poster (its position and
+rotation sensors), so `emuu rotate` afterwards turns the view away; run `show` again.
+
+Inside `emuu run` the instance name is in `EMUU_INSTANCE`, which `emuu camera` picks up, so a test needs no name:
+
+```python
+# tests/test_scan.py, run with: emuu run -- pytest -q tests/
+import subprocess
+
+def camera_show(path):
+    subprocess.run(["emuu", "camera", "show", path], check=True)
+
+def test_scanner_reads_codes(driver):          # the Appium fixture above
+    camera_show("fixtures/qr-ok.png")
+    open_scanner(driver)                       # your app's flow
+    assert wait_for_text(driver, "Payment link opened")
+    camera_show("fixtures/qr-expired.png")     # no restart between pictures
+    assert wait_for_text(driver, "Code expired")
+```
+
+**Farm.** Goldens created now have the default cameras; clones carry their golden's cameras (a clone whose setting
+differs keeps the golden's and logs that the golden should be re-sealed). `emuu camera show <leased instance>`
+works on leased devices. A pool reset (snapshot load) leaves the camera in a known state: **default posters, the
+camera back at its start position, no picture shown** (the snapshot restores the device position but not the
+host-side poster, so the reset clears it explicitly).
+
+**Mac cameras.** `emuu camera list-host` lists them without opening them. The engine opens the camera itself; macOS
+asks the app that started it: the Emuu app asks for camera access before it starts such a device (if you deny it,
+the device starts with the emulated camera instead and the app says where to allow it); `emuu start` in a terminal
+makes macOS ask for the terminal app. Each rebuild of the ad-hoc-signed app may ask again. (Not verified end to
+end: no frame from a real Mac camera was captured during development.)
+
+**In the app.** The Camera button in the strip opens a panel: pick the back and front source (None, Virtual scene,
+Emulated, each Mac camera by name); when the running device has other cameras than the setting, it says so and
+offers **Restart Device Now** (one cold boot; the window stays open). Below, **Choose Image…** or drop an image on
+the panel (not on the device screen, where a dropped APK installs) to show it to the back camera; **Clear**
+restores the room.
 
 ## Play Store sign-in
 

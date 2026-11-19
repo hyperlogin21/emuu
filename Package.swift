@@ -28,7 +28,8 @@ let package = Package(
         // Test doubles (FakeProcessRunner, FakeClock, FakeDeviceShell, FakeEngineControl) for every test target.
         .target(name: "EmuuTestSupport", dependencies: ["EmuuBase"]),
 
-        .target(name: "EmuuEngine", dependencies: ["EmuuBase"]),
+        // EmuuGRPC: the virtual scene camera is aimed through the gRPC physical model (VirtualSceneCamera).
+        .target(name: "EmuuEngine", dependencies: ["EmuuBase", "EmuuGRPC"]),
         .target(name: "EmuuADB", dependencies: ["EmuuBase"]),
         .target(name: "EmuuMemory", dependencies: ["EmuuBase"]),
         // shm_open(2) wrapper (variadic in C, so Swift cannot call it directly).

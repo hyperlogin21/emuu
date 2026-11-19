@@ -48,9 +48,26 @@ public final class LiveFarmDriver: FarmDeviceDriver, @unchecked Sendable {
     }
 
     public func reset(instance: String) async throws {
-        let engine = try await engines.engine(for: InstanceID(validating: instance))
+        let id = try InstanceID(validating: instance)
+        let engine = try await engines.engine(for: id)
         await engine.refresh()
         try await engine.resetToQuickBootSnapshot()
+        await resetCamera(id, engine: engine)
+    }
+
+    /// After a reset the virtual scene camera is back to its known state: default posters and the start pose. The
+    /// snapshot load restores the guest, not the engine's scene (a picture shown with `emuu camera show` would
+    /// otherwise stay). Best effort: a device without the virtual scene has nothing to reset.
+    func resetCamera(_ id: InstanceID, engine: EngineInstance) async {
+        guard let config = try? engines.store.load(id),
+              CameraLaunchPlan.launchedCameras(avdDirectory: engines.paths.avdDirectory(for: id))?.back == "virtualscene" else { return }
+        do {
+            let (scene, _) = try await VirtualSceneAccess.open(paths: engines.paths, engine: engine, config: config)
+            try await scene.clear()
+            CameraShownState.remove(engines.paths, id)
+        } catch {
+            log.warning("reset \(id): camera scene not reset: \(describe(error))")
+        }
     }
 
     public func destroy(instance: String) async {

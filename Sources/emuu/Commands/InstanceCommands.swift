@@ -55,6 +55,12 @@ struct Create: AsyncParsableCommand {
     @Option(help: "Video decoder: auto (default: \(VideoDecoderMode.resolvedDefault.rawValue)), hardware (host VideoToolbox), software (Android's own decoders in the guest), host-software (host ffmpeg). See `emuu video-decoder --help`.")
     var videoDecoder: VideoDecoderMode?
 
+    @Option(help: "Back camera: virtualscene (default; can show a picture, `emuu camera show`), emulated, none, webcam<N> or webcam:<name>. See `emuu camera --help`.")
+    var cameraBack: CameraSource?
+
+    @Option(help: "Front camera: emulated (default), none, webcam<N> or webcam:<name>.")
+    var cameraFront: CameraSource?
+
     @Option(help: "Fixed console port (even, 5554-5584); adb uses port+1. Default: first free pair at launch.")
     var port: Int?
 
@@ -84,6 +90,12 @@ struct Create: AsyncParsableCommand {
         if let gpu { config.gpu = gpu }
         if noAudio { config.audioOutput = false }
         if let videoDecoder { config.videoDecoder = videoDecoder }
+        if cameraBack != nil || cameraFront != nil {
+            var cams = config.cameraConfig
+            if let cameraBack { cams.back = cameraBack }
+            if let cameraFront { cams.front = cameraFront }
+            config.camera = cams
+        }
         do { try config.validate() } catch { throw ValidationError(describe(error)) }
         return config
     }
