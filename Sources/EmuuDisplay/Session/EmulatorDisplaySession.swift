@@ -347,13 +347,25 @@ final class SharedState: @unchecked Sendable {
         var stats = DisplayStats.zero
         var rate = FrameRateCounter()
         var geometry: (VideoSize, SkinRotation)?
+        /// Newest frame message not yet converted (latest wins; see `handleFrame`).
+        var pendingFrame: PendingFrame?
+        var conversionScheduled = false
+    }
+
+    struct PendingFrame {
+        var image: EmulatorImage
+        var generation: UInt64
+        var receivedAt: ContinuousClock.Instant
     }
 
     private let lock = NSLock()
     private var fields = Fields()
-    /// Reader-thread only (one frame stream at a time).
+    /// Conversion-queue only.
     private let converter = FrameConverter()
     private let options: EmulatorDisplaySession.FrameOptions
+    /// Frames are converted here, never on the gRPC reader thread (which also delivers every other reply on the
+    /// connection: `setPhysicalModel`, clipboard, status).
+    private let conversionQueue = DispatchQueue(label: "emuu.display.convert", qos: .userInteractive)
 
     init(options: EmulatorDisplaySession.FrameOptions = .default) {
         self.options = options
@@ -384,10 +396,48 @@ final class SharedState: @unchecked Sendable {
         }
     }
 
-    /// Reader thread: one `Image` from the frame stream.
+    /// Reader thread: one `Image` from the frame stream. Only records it as the newest frame and wakes the
+    /// conversion queue; returns at once.
+    ///
+    /// Why not convert here: this thread reads the whole HTTP/2 connection. When converting took longer than a
+    /// frame interval (debug builds: the validated MMAP read is ≈ 50 ms per 720x1600 frame), frame messages
+    /// piled up in the socket, every other reply on the connection waited behind them (the Rotate button's
+    /// `setPhysicalModel` hit its 10 s deadline), and the queued messages' sizes were applied to the region's
+    /// *current* pixels: portrait metadata over a landscape picture (garbled, window not resized). With MMAP only
+    /// the newest message describes the region, so older unconverted messages are superseded (counted as dropped).
     func handleFrame(_ image: EmulatorImage, generation: UInt64) {
         let receivedAt = ContinuousClock.now
         guard !image.isEmpty else { return }   // display off / not yet composed
+        let schedule = locked { s -> Bool in
+            guard s.generation == generation else { return false }
+            if s.pendingFrame != nil { s.stats.droppedFrames &+= 1 }
+            s.pendingFrame = PendingFrame(image: image, generation: generation, receivedAt: receivedAt)
+            guard !s.conversionScheduled else { return false }
+            s.conversionScheduled = true
+            return true
+        }
+        if schedule { conversionQueue.async { self.drainPendingFrames() } }
+    }
+
+    /// Conversion queue: converts the newest pending frame until none is left.
+    private func drainPendingFrames() {
+        while let next = locked({ s -> PendingFrame? in
+            let p = s.pendingFrame
+            s.pendingFrame = nil
+            if p == nil { s.conversionScheduled = false }
+            return p
+        }) {
+            convert(next.image, generation: next.generation, receivedAt: next.receivedAt)
+        }
+    }
+
+    /// Tests: waits until every frame handed to `handleFrame` so far has been converted (or superseded).
+    func waitForPendingConversions() {
+        conversionQueue.sync {}
+        while locked({ $0.conversionScheduled }) { conversionQueue.sync {} }
+    }
+
+    private func convert(_ image: EmulatorImage, generation: UInt64, receivedAt: ContinuousClock.Instant) {
         let w = image.width, h = image.height
         let inline = options.transport == .inline
         let snapshot = locked { s -> (SharedMemoryRegion?, (any DisplayFrameSink)?, Bool)? in

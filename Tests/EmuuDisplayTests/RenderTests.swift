@@ -146,3 +146,69 @@ struct LiveDisplaySessionTests {
         print("LIVE session resume→frame \(ContinuousClock.now - t), stats \(session.stats())")
     }
 }
+
+/// Regression (app Rotate button, 2026-11-19): frame conversion must not run on the gRPC reader thread, and only
+/// the newest MMAP frame message may be converted. Before the fix a slow conversion (debug build: ≈ 50 ms per
+/// frame) backed up the whole connection — `setPhysicalModel` timed out — and queued portrait metadata was
+/// applied to the region's already-landscape pixels (garbled frame, window not resized).
+struct FrameHandoffTests {
+    /// Blocks in its first `consume` until released (a renderer/converter slower than the frame rate).
+    final class SlowSink: DisplayFrameSink, @unchecked Sendable {
+        let gate = DispatchSemaphore(value: 0)
+        let entered = DispatchSemaphore(value: 0)
+        let frames = Locked<[DisplayFrame]>([])
+        func consume(_ frame: DisplayFrame) {
+            let first = frames.withLock { f -> Bool in f.append(frame); return f.count == 1 }
+            if first { entered.signal(); _ = gate.wait(timeout: .now() + 2) }
+        }
+    }
+
+    static func image(_ w: Int, _ h: Int, _ rotation: SkinRotation, seq: UInt32) -> EmulatorImage {
+        var format = EmulatorImageFormat(format: .rgba8888, width: w, height: h)
+        format.rotation = rotation
+        return EmulatorImage(format: format, seq: seq)
+    }
+
+    @Test func readerThreadNeverWaitsAndOnlyTheNewestFrameIsConverted() throws {
+        let shared = SharedState(options: .init(transport: .mmap, validateSharedMemory: true))
+        let region = try SharedMemoryRegion(size: 160 * 160 * 4)
+        memset(region.base, 0x40, region.size)
+        let sink = SlowSink()
+        let geometry = Locked<[VideoSize]>([])
+        shared.locked { s in
+            s.observers[UUID()] = { event in
+                if case .frameGeometryChanged(let size, _) = event { geometry.withLock { $0.append(size) } }
+            }
+            s.region = region
+            s.sink = sink
+            s.generation = 7
+        }
+
+        // Portrait frames while the consumer is stuck on the first one: the reader thread must not wait.
+        let t = ContinuousClock.now
+        shared.handleFrame(Self.image(72, 160, .portrait, seq: 0), generation: 7)
+        _ = sink.entered.wait(timeout: .now() + 3)   // (old code: returns after the 2 s gate timeout)
+        for seq in 1..<50 { shared.handleFrame(Self.image(72, 160, .portrait, seq: UInt32(seq)), generation: 7) }
+        // The device turns: the engine writes the landscape picture, then sends its metadata.
+        memset(region.base, 0x80, region.size)
+        shared.handleFrame(Self.image(160, 72, .landscape, seq: 50), generation: 7)
+        #expect(ContinuousClock.now - t < .milliseconds(1500), "handleFrame blocked the gRPC reader thread")
+
+        sink.gate.signal()
+        shared.waitForPendingConversions()
+        let got = sink.frames.current
+        // The first portrait frame (being consumed), then straight to the newest: the landscape one.
+        #expect(got.count == 2)
+        #expect(got.last?.size == VideoSize(width: 160, height: 72))
+        #expect(got.last?.rotation == .landscape)
+        #expect(got.last?.seq == 50)
+        #expect(geometry.current.last == VideoSize(width: 160, height: 72))
+        #expect(shared.locked { $0.stats.droppedFrames } == 49)
+        #expect(shared.locked { $0.stats.rotation } == .landscape)
+
+        // A frame of an old stream generation (after pause/stop) is ignored.
+        shared.handleFrame(Self.image(72, 160, .portrait, seq: 51), generation: 6)
+        shared.waitForPendingConversions()
+        #expect(sink.frames.current.count == 2)
+    }
+}

@@ -99,6 +99,13 @@ public struct EmulatorImage: Sendable {
     /// Unix µs when the emulator produced the frame.
     public var timestampUs: UInt64 = 0
 
+    public init(format: EmulatorImageFormat = EmulatorImageFormat(), image: ArraySlice<UInt8> = [], seq: UInt32 = 0, timestampUs: UInt64 = 0) {
+        self.format = format
+        self.image = image
+        self.seq = seq
+        self.timestampUs = timestampUs
+    }
+
     public var width: Int { format.width }
     public var height: Int { format.height }
     public var isEmpty: Bool { width == 0 || height == 0 }

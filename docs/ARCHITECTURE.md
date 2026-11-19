@@ -359,6 +359,12 @@ AVD tuning (EmuuEngine config generation):
   `unstableFrames`. Cost ≈ +0.5 ms per 720x1600 frame and ≈ +3.5 % of one core at 60 fps. It cannot detect an engine
   writer that was paused mid-frame for the whole read-and-compare. `EMUU_DISPLAY_SHM_VALIDATE=0` turns it off
   (diagnostics only).
+* **Frames are converted off the gRPC reader thread, newest first.** The connection's single reader thread only
+  stores each frame message as the pending one and wakes a serial conversion queue (`SharedState.handleFrame`);
+  a message superseded before conversion is dropped (`droppedFrames`). With MMAP only the newest message describes
+  the region, and the reader thread must stay free because it also delivers every other reply on the connection
+  (`setPhysicalModel`, clipboard, status). Converting on that thread broke the app's Rotate button whenever
+  conversion was slower than the frame rate (debug builds): see engine-findings "Rotation from the app".
 * **Keyboard and text input** (`EmuuDisplay/Input/KeyMapping.swift`, `TypingSequencer.swift`,
   `View/EmulatorDisplayView+TextInput.swift`; README "Typing"). The device view is an `NSTextInputClient`.
   * *Route* (`KeyEventTranslator.route`): while an input method composes, every key goes to macOS text input;
