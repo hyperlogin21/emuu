@@ -7,9 +7,14 @@ import EmuuGRPC
 /// Layer-hosting view that shows the engine's framebuffer (IOSurface contents, aspect-fit, letterboxed) and
 /// turns mouse, trackpad and keyboard input into engine input events.
 ///
+/// Typing: the view is an `NSTextInputClient`, so the Mac's keyboard layout, dead keys, press-and-hold accents,
+/// the emoji picker and input methods (Pinyin, Japanese…) produce the text; `KeyEventTranslator` decides what
+/// goes to the guest as keys and what as pasted text (rule in KeyMapping.swift), `TypingSequencer` keeps it in order.
+///
 /// Host shortcuts (⌘ is never forwarded to the device):
-/// ⌘B back · ⌘⇧H home · ⌘S recent apps · ⌘R rotate · ⌘P power · ⌘N notifications · ⌘V paste host clipboard ·
-/// ⌘C/⌘X copy/cut the device selection to the host · ⌘↑/⌘↓ volume.
+/// ⌘B back · ⌘⇧H home · ⌘S recent apps · ⌘R rotate · ⌘P power · ⌘N notifications · ⌘↑/⌘↓ volume ·
+/// ⌘V paste the Mac clipboard · ⌘C/⌘X copy/cut the device selection (it reaches the Mac clipboard) ·
+/// ⌘A select all · ⌘Z/⇧⌘Z undo/redo · ⌘←/⌘→ line start/end (⇧ selects) · ⌘⌫ delete to line start.
 @MainActor
 public final class EmulatorDisplayView: NSView {
     public let displayLayer = CALayer()
@@ -35,10 +40,14 @@ public final class EmulatorDisplayView: NSView {
     /// Called when on-screen visibility or key-window focus changes.
     public var onVisibilityChange: ((_ visible: Bool, _ focused: Bool) -> Void)?
     public var hostClipboardEnabled = true
-    /// Clipboard actions that need the session.
-    public var setDeviceClipboard: ((_ text: String, _ paste: Bool) -> Void)?
-    /// ⌘C / ⌘X: the device copies/cuts its selection; the clipboard stream brings it to the host.
-    public var requestDeviceCopy: ((_ cut: Bool) -> Void)?
+    /// Ordered keyboard/pointer output; text the guest keyboard cannot type goes through the guest clipboard
+    /// (the controller sets its clipboard closures).
+    public let typing = TypingSequencer(pasteChord: KeyEventTranslator().pasteChord)
+    /// The user started typing on the Mac keyboard (first key after a pause, a click or a focus change), with the
+    /// `focusEpoch` at that moment. The app hides Android's soft keyboard then (`hideSoftKeyboardIfFocusUnchanged`).
+    public var onMacTyping: ((_ focusEpoch: UInt64) -> Void)?
+    /// Bumped by clicks and keys that may move focus (Return, Tab, Escape).
+    public internal(set) var focusEpoch: UInt64 = 0
 
     /// Size of the frames being shown (already rotated by the engine).
     public private(set) var videoSize = VideoSize(width: 0, height: 0)
@@ -46,7 +55,17 @@ public final class EmulatorDisplayView: NSView {
     private var physicalSize = VideoSize(width: 0, height: 0)
     private var pointer = PointerInputTranslator(mapper: AspectFitMapper(viewSize: .zero, videoSize: VideoSize(width: 0, height: 0)),
                                                  device: DeviceTouchMapper(physical: VideoSize(width: 0, height: 0), rotation: .portrait))
-    private var keys = KeyEventTranslator()
+    var keys = KeyEventTranslator()
+    // Text input state (EmulatorDisplayView+TextInput.swift).
+    var currentKeyEvent: NSEvent?
+    var textInputHandled = false
+    var markedString = ""
+    var markedSelection = NSRange(location: 0, length: 0)
+    /// Text committed since the last click/navigation key, so input methods can address it (press-and-hold
+    /// replaces the character it follows).
+    var typedShadow = ""
+    var lastMacTyping: (at: ContinuousClock.Instant, epoch: UInt64)?
+    let markedLayer = CATextLayer()
     private var windowObservers: [NSObjectProtocol] = []
     public private(set) lazy var frameSink = LayerFrameSink(layer: displayLayer)
 
@@ -70,6 +89,8 @@ public final class EmulatorDisplayView: NSView {
         layer = displayLayer
         wantsLayer = true
         layerContentsRedrawPolicy = .never
+        setUpMarkedLayer()
+        typing.send = { [weak self] events in self?.sendInput?(events) ?? false }
     }
 
     public override var isFlipped: Bool { true }
@@ -95,6 +116,11 @@ public final class EmulatorDisplayView: NSView {
     /// Releases held keys and touches.
     public func releaseAllInput() {
         dispatch(pointer.cancelAll(), userInitiated: false)
+        releaseKeys()
+    }
+
+    /// Releases held keys and modifiers in the guest.
+    public func releaseKeys() {
         dispatch(keys.releaseAll(), userInitiated: false)
     }
 
@@ -116,11 +142,12 @@ public final class EmulatorDisplayView: NSView {
         pointer.device = DeviceTouchMapper(physical: physicalSize, rotation: rotation)
     }
 
+    /// Every input event leaves through the sequencer, so it stays behind text still being pasted.
     @discardableResult
-    private func dispatch(_ events: [EmulatorInputEvent], userInitiated: Bool = true) -> Bool {
+    func dispatch(_ events: [EmulatorInputEvent], userInitiated: Bool = true) -> Bool {
         guard !events.isEmpty else { return false }
         if userInitiated { onUserInteraction?() }
-        return sendInput?(events) ?? false
+        return typing.events(events)
     }
 
     private func location(_ event: NSEvent) -> CGPoint {
@@ -136,7 +163,11 @@ public final class EmulatorDisplayView: NSView {
     // MARK: Mouse
 
     public override func mouseDown(with event: NSEvent) {
+        commitMarkedText()
         window?.makeFirstResponder(self)
+        focusEpoch &+= 1
+        resetTypedShadow()
+        typing.resetFieldState()
         dispatch(pointer.mouseDown(.left, at: location(event), pressure: Self.pressure(event)))
     }
 
@@ -222,56 +253,112 @@ public final class EmulatorDisplayView: NSView {
         return true
     }
 
-    // MARK: Keyboard
+    // MARK: Keyboard (text input: EmulatorDisplayView+TextInput.swift)
 
     public override func keyDown(with event: NSEvent) {
-        dispatch(keys.translate(HostKeyEvent(kind: .down, keyCode: event.keyCode, characters: event.characters,
-                                             modifiers: event.modifierFlags, isRepeat: event.isARepeat)))
+        onUserInteraction?()
+        let route = KeyEventTranslator.route(keyCode: event.keyCode, modifiers: event.modifierFlags, hasMarkedText: hasMarkedText())
+        switch route {
+        case .ignore:
+            return
+        case .physical:
+            let code = Int(event.keyCode)
+            if Self.focusChangingKeys.contains(code) { focusEpoch &+= 1 }
+            if code == kVK_Delete, !event.modifierFlags.contains(.option) { typedShadowDeleteBackward() } else { resetTypedShadow() }
+            dispatch(keys.physicalDown(keyCode: event.keyCode, modifiers: event.modifierFlags, isRepeat: event.isARepeat))
+        case .text:
+            currentKeyEvent = event
+            defer { currentKeyEvent = nil }
+            textInputHandled = false
+            interpretKeyEvents([event])
+            if !textInputHandled, !hasMarkedText(), let chars = event.characters, KeyEventTranslator.isTypable(chars) {
+                // No input context (tests, some synthesized events): the characters the key produced.
+                insertText(chars, replacementRange: NSRange(location: NSNotFound, length: 0))
+            }
+            noteMacTyping()
+        }
     }
 
     public override func keyUp(with event: NSEvent) {
-        dispatch(keys.translate(HostKeyEvent(kind: .up, keyCode: event.keyCode, characters: event.characters,
-                                             modifiers: event.modifierFlags)))
+        dispatch(keys.keyUp(keyCode: event.keyCode))
     }
 
     public override func flagsChanged(with event: NSEvent) {
         dispatch(keys.modifierChanged(keyCode: event.keyCode, flags: event.modifierFlags))
     }
 
+    /// Keys after which the focused field may change (a BACK to hide the soft keyboard must not follow them).
+    static let focusChangingKeys: Set<Int> = [kVK_Return, kVK_ANSI_KeypadEnter, kVK_Tab, kVK_Escape]
+
+    /// ⌘ shortcuts while the device screen has keyboard focus. Device actions (back, home, rotate…) and text
+    /// editing (⌘A/C/X/V/Z, ⌘←/→, ⌘⌫) are handled here; every other ⌘ chord (⌘Q, ⌘W, ⌘M, ⌘,, ⌘K, ⌥⌘R, ⇧⌘S…)
+    /// goes on to the menus.
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self, event.type == .keyDown,
-              event.modifierFlags.contains(.command) else { return super.performKeyEquivalent(with: event) }
-        let shift = event.modifierFlags.contains(.shift)
-        let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
-        func press(_ k: DeviceKey) {
-            onUserInteraction?()
-            pressKey?(k)
-        }
-        switch (key, shift) {
-        case ("b", false): press(.back)
-        case ("h", true): press(.home)
-        case ("s", false): press(.appSwitch)
-        case ("r", false):
-            onUserInteraction?()
-            onRotate?()
-        case ("p", false): press(.power)
-        case ("n", false): pullDownNotifications()
-        case ("v", false) where hostClipboardEnabled:
-            guard let text = NSPasteboard.general.string(forType: .string) else { return true }
-            onUserInteraction?()
-            setDeviceClipboard?(text, true)
-        case ("c", false) where hostClipboardEnabled:
-            onUserInteraction?()
-            requestDeviceCopy?(false)
-        case ("x", false) where hostClipboardEnabled:
-            onUserInteraction?()
-            requestDeviceCopy?(true)
-        default:
-            if Int(event.keyCode) == kVK_UpArrow { press(.volumeUp); return true }
-            if Int(event.keyCode) == kVK_DownArrow { press(.volumeDown); return true }
+              let action = Self.commandAction(for: event, hostClipboard: hostClipboardEnabled) else {
             return super.performKeyEquivalent(with: event)
         }
+        commitMarkedText()
+        onUserInteraction?()
+        func press(_ k: DeviceKey) { pressKey?(k) }
+        switch action {
+        case .device(let k): press(k)
+        case .rotate: onRotate?()
+        case .notifications: pullDownNotifications()
+        case .pasteHostClipboard:
+            resetTypedShadow()
+            if let text = NSPasteboard.general.string(forType: .string) { typing.paste(text, restoreClipboard: false) }
+        case .edit(let s):
+            resetTypedShadow()
+            dispatch(keys.syncModifiers(event.modifierFlags.intersection([.shift])) + keys.shortcut(s, selecting: event.modifierFlags.contains(.shift)))
+        }
         return true
+    }
+
+    /// What a ⌘ chord does on the device (nil: not ours).
+    public enum CommandAction: Sendable, Hashable {
+        case device(DeviceKey), rotate, notifications, pasteHostClipboard, edit(EditShortcut)
+    }
+
+    public static func commandAction(for event: NSEvent, hostClipboard: Bool) -> CommandAction? {
+        let flags = event.modifierFlags
+        guard flags.contains(.command), !flags.contains(.option), !flags.contains(.control) else { return nil }
+        let shift = flags.contains(.shift)
+        let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        switch Int(event.keyCode) {
+        case kVK_UpArrow: return .device(.volumeUp)
+        case kVK_DownArrow: return .device(.volumeDown)
+        case kVK_LeftArrow: return .edit(.lineStart)
+        case kVK_RightArrow: return .edit(.lineEnd)
+        case kVK_Delete: return shift ? nil : .edit(.deleteToLineStart)
+        case kVK_ForwardDelete: return shift ? nil : .edit(.deleteToLineEnd)
+        default: break
+        }
+        switch (key, shift) {
+        case ("b", false): return .device(.back)
+        case ("h", true): return .device(.home)
+        case ("s", false): return .device(.appSwitch)
+        case ("r", false): return .rotate
+        case ("p", false): return .device(.power)
+        case ("n", false): return .notifications
+        case ("a", false): return .edit(.selectAll)
+        case ("z", false): return .edit(.undo)
+        case ("z", true): return .edit(.redo)
+        case ("v", false) where hostClipboard: return .pasteHostClipboard
+        case ("c", false) where hostClipboard: return .edit(.copy)
+        case ("x", false) where hostClipboard: return .edit(.cut)
+        default: return nil
+        }
+    }
+
+    // Edit menu items clicked with the mouse while the device screen has focus.
+    @objc public override func selectAll(_ sender: Any?) { dispatch(keys.shortcut(.selectAll)) }
+    @objc public func copy(_ sender: Any?) { if hostClipboardEnabled { dispatch(keys.shortcut(.copy)) } }
+    @objc public func cut(_ sender: Any?) { if hostClipboardEnabled { dispatch(keys.shortcut(.cut)) } }
+    @objc public func paste(_ sender: Any?) {
+        guard hostClipboardEnabled, let text = NSPasteboard.general.string(forType: .string) else { return }
+        commitMarkedText()
+        typing.paste(text, restoreClipboard: false)
     }
 
     /// ⌘N: a finger swipe down from the top edge, like on the phone.
@@ -289,8 +376,25 @@ public final class EmulatorDisplayView: NSView {
     }
 
     public override func resignFirstResponder() -> Bool {
+        commitMarkedText()
         releaseAllInput()
         return super.resignFirstResponder()
+    }
+
+    public override func becomeFirstResponder() -> Bool {
+        focusEpoch &+= 1
+        resetTypedShadow()
+        return super.becomeFirstResponder()
+    }
+
+    /// Takes keyboard focus when nothing else in the window has it, so typing works as soon as the window is
+    /// key (after opening it, switching back to it, or clicking the control strip).
+    func claimKeyboardFocusIfUnowned() {
+        guard let window, window.firstResponder !== self else { return }
+        let owner = window.firstResponder
+        if owner == nil || owner === window || !(owner is NSText || owner is NSTextField || owner is NSTextInputClient) {
+            window.makeFirstResponder(self)
+        }
     }
 
     // MARK: Visibility
@@ -314,6 +418,19 @@ public final class EmulatorDisplayView: NSView {
             windowObservers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.reportVisibility() }
             })
+        }
+        // Keys: never leave one held in the guest when the window stops receiving key-ups; take focus when key.
+        windowObservers.append(center.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.releaseKeys() }
+        })
+        windowObservers.append(center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.claimKeyboardFocusIfUnowned() }
+        })
+        windowObservers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.releaseKeys() }
+        })
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.claimKeyboardFocusIfUnowned() }
         }
         // Un-minimise: the occlusion state can lag behind the zoom animation (or not be re-posted at all), so
         // report again once the animation is over.

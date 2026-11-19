@@ -39,8 +39,8 @@ Honest limits:
   saves the VM and quits in about 2 s, frees everything, and resumes in about 2 s.
 * The display carries no audio (sound is the engine's own audio output; `create --no-audio` turns it off), and
   there is no camera.
-* Typing non-ASCII characters (é, ü, emoji) from the Mac keyboard does not reach Android (the engine's key
-  injection handles printable ASCII); paste them with ⌘V instead.
+* Characters Android's hardware keyboard cannot type (é, ü, 中文, emoji) reach the device through its clipboard
+  (see [Typing](#typing)); a few Mac keys have no Android equivalent on the emulator's keyboard (F-keys, Insert).
 
 Emuu keeps its state in `~/.emuu` (or `$EMUU_HOME`) and never touches `~/.android/avd` or your other AVDs.
 
@@ -154,13 +154,50 @@ display service; the window then offers **Restart Engine** (a quick-boot save an
 lost). Hibernated and stopped instances need nothing. If an `emuu start` supervisor already
 governs the instance, the app only shows the screen and forwards visibility, recording and input hints to it.
 
-**On-screen keyboard.** On the Play Store image Gboard shows its keyboard in text fields even with the
-emulator's hardware keyboard, and there is no shell command to show or hide an IME. With the Keyboard button
-off, Emuu closes the soft keyboard (BACK while it is shown, which only closes the IME) after taps that bring it
-up; turning it on again shows it for the focused field (tapping it, found via `uiautomator dump` or your last
-tap). It also mirrors Android's *Use on-screen keyboard* setting (`show_ime_with_hard_keyboard`). Typing on the
-Mac keyboard works either way (keys go in as hardware key events). Recording note: the engine only sends frames
-when the screen changes, so a static screen gives a low-frame-rate (but correctly timed) file.
+**On-screen keyboard.** On the Play Store image Gboard shows its keyboard in every focused text field, even with
+the emulator's hardware keyboard and *Use on-screen keyboard* (`show_ime_with_hard_keyboard`) off, and there is no
+shell command to show or hide an IME. Emuu therefore closes it (BACK while it is shown, which only closes the IME)
+as soon as you **start typing on the Mac keyboard**, so it does not cover the app; with the Keyboard button **off**
+it also closes it after taps that bring it up. The **Keyboard button acts on what you see**: while the keyboard is
+on screen it hides it and keeps it off; otherwise it turns it on and shows it for the focused field (tapping the
+field, found via `uiautomator dump` or your last tap) — also after typing closed it. Emuu keeps Android's *Use
+on-screen keyboard* setting in line with the button. Recording note: the engine only sends frames when the screen
+changes, so a static screen gives a low-frame-rate (but correctly timed) file.
+
+## Typing
+
+Click the device screen (or just bring its window to the front) and type on the Mac keyboard. What macOS would
+type in a text field is what Android gets: your keyboard layout (AZERTY, QWERTZ… — the character on the key, not
+the US position), dead keys and ⌥ characters (é, ñ, ü, å, ß, ™), press-and-hold accents, the emoji picker
+(⌃⌘Space), dictation and input methods (Pinyin, Japanese…: the composition stays in a small bar at the bottom of the
+screen until you commit it; nothing half-composed reaches the device).
+
+| Mac | Android |
+| --- | --- |
+| Letters, digits, symbols, space, Return, Tab, ⌫, ⌦ (fn-⌫), arrows | the same; held keys repeat |
+| ⇧ + arrows | select |
+| ⌥← / ⌥→, ⌥⌫ / ⌥⌦ | word left/right, delete word |
+| ⌘← / ⌘→ (⇧ selects), Home / End | line start/end |
+| Page Up / Page Down | start/end of the text |
+| ⌘⌫ / ⌘⌦ | delete to line start/end |
+| ⌘A ⌘Z ⇧⌘Z | select all, undo, redo |
+| ⌘C / ⌘X | copy/cut in the device; the text lands on the Mac clipboard |
+| ⌘V | paste the Mac clipboard into the device |
+| ⌃ + key | that Android Ctrl shortcut (by key position) |
+| Esc | Back (first closes the on-screen keyboard) |
+
+⌘ never reaches the device: the menu shortcuts (⌘Q, ⌘W, ⌘M, ⌘,, ⌘K, ⌥⌘R, ⇧⌘S…) work as usual, and ⌘B/⇧⌘H/⌘S/⌘R/
+⌘P/⌘N/⌘↑/⌘↓ are the device buttons (back, home, recents, rotate, power, notifications, volume). Releasing a key
+outside the window, switching apps mid-press or pressing ⌘ while a key is down never leaves a key stuck.
+
+How it works: characters Android's (US) keyboard map can type go in as key presses, held while the Mac key is held
+(so games still see key state); anything else is set as the device clipboard, pasted with Ctrl+V and the previous
+device clipboard put back. Keys that are not characters (arrows, Return, ⌫…) and ⌃ chords go by key.
+
+Known limits: F-keys, Insert and the keypad's own keys do not exist on the emulator's Android keyboard (keypad
+digits type digits, keypad Enter is Return); games get letters by the character on your layout, so on AZERTY the
+key labelled Z sends Android's Z; ⌥ is not sent as Alt; text typed into the device with an input method that Android
+does not use (e.g. a terminal app ignoring the clipboard) only gets ASCII.
 
 ## How a session runs
 

@@ -290,12 +290,14 @@ public actor EmulatorDisplaySession {
         send([.key(.key(key.w3cKey, .keydown)), .key(.key(key.w3cKey, .keyup))])
     }
 
-    /// Sets the guest clipboard; with `paste`, also sends Ctrl+V to the focused field.
+    /// Sets the guest clipboard; with `paste`, also sends Ctrl+V to the focused field (after a short settle: the
+    /// guest reads the clipboard when it handles the key). Interactive typing uses `TypingSequencer` instead.
     public func setClipboard(_ text: String, paste: Bool) async throws {
         let c = try await connected()
         try await c.setClipboard(text)
         if paste {
-            send([.key(.macKey(0x3B, .keydown)), .key(.macKey(0x09, .keypress)), .key(.macKey(0x3B, .keyup))])
+            try? await Task.sleep(for: .milliseconds(40))
+            send(KeyEventTranslator().pasteChord)
         }
     }
 

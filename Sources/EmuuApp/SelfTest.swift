@@ -19,6 +19,7 @@ import EmuuDisplay
 ///
 /// * `EMUU_APP_SELFTEST_EVIDENCE=<dir>`: where PNG/MP4 evidence goes (default `~/.emuu/logs`).
 /// * `EMUU_APP_SELFTEST_QUIT=1`: quit when done (instance windows closed, engine left running).
+/// * `EMUU_APP_SELFTEST_ONLY=keyboard`: only the keyboard/text-input scenarios (KeyboardSelfTest.swift).
 /// Results go to stdout and `~/.emuu/logs/app-selftest.txt`.
 @MainActor
 final class SelfTestRunner {
@@ -76,7 +77,9 @@ final class SelfTestRunner {
             }
             report("SELFTEST cycle \(cycle) streaming after \(fmt(toFrames)); frames=\(stats.totalFrames) dropped=\(stats.droppedFrames) streams=\(stats.streamsOpened) transportLatency=\(stats.lastTransportLatencyMs.map { String(format: "%.1fms", $0) } ?? "?") video=\(stats.videoSize.map { "\($0.width)x\($0.height)" } ?? "?") governs=\(session.governsMemory) automation=\(session.automationMode)")
 
-            if cycle == 1, env["EMUU_APP_SELFTEST_ONLY"] == "native" {
+            if cycle == 1, env["EMUU_APP_SELFTEST_ONLY"] == "keyboard" {
+                await KeyboardSelfTest(model: model, report: report).run(session)
+            } else if cycle == 1, env["EMUU_APP_SELFTEST_ONLY"] == "native" {
                 await exerciseNativeDisplay(session)
             } else if cycle == 1 {
                 await renderWindow(session)

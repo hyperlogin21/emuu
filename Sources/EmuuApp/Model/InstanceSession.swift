@@ -215,6 +215,7 @@ final class InstanceSession: Identifiable {
         let controller = EmulatorDisplayController(session: native, instanceID: id, activityTracker: services.activity)
         interposeVisibility(controller)
         controller.view.onPointerUp = { [weak self] x, y in self?.pointerUp(x: x, y: y) }
+        controller.view.onMacTyping = { [weak self] epoch in self?.macTypingStarted(focusEpoch: epoch) }
         controller.view.onFileDrop = { [weak self] urls in self?.install(urls: urls) }
         controller.view.onDropTargeted = { [weak self] t in self?.ui.dropTargeted = t }
         display = controller
@@ -762,9 +763,32 @@ final class InstanceSession: Identifiable {
 
     // MARK: Soft keyboard
 
-    /// Keyboard button: turns Android's on-screen keyboard on (shows it for a focused field) or off (hides it).
+    /// Keyboard button: acts on what is on screen. A shown soft keyboard is hidden and stays off; otherwise it is
+    /// turned on and shown for the focused field — also when it is "on" but was hidden because you typed on the
+    /// Mac keyboard.
     func toggleSoftKeyboard() {
-        Task { await setSoftKeyboard(!softKeyboardEnabled) }
+        Task {
+            if softKeyboardEnabled, let client, let st = try? await SoftKeyboard(shell: client).state(), !st.imeShown, st.editorFocused {
+                await setSoftKeyboard(true)
+            } else {
+                await setSoftKeyboard(!softKeyboardEnabled)
+            }
+        }
+    }
+
+    /// Typing on the Mac keyboard started: Android's soft keyboard (Gboard shows it for every focused field, even
+    /// with the emulator's hardware keyboard) is closed so it does not cover the app. In "on" mode it comes back
+    /// with the next tap on a field or the Keyboard button. BACK closes only the IME and is not sent if a click or
+    /// a focus-moving key (Return, Tab, Esc) happened meanwhile.
+    func macTypingStarted(focusEpoch: UInt64) {
+        guard let client, !keyboardBusy else { return }
+        keyboardEnforceTask?.cancel()
+        keyboardEnforceTask = Task { [weak self] in
+            guard let st = try? await SoftKeyboard(shell: client).state(), st.imeShown, !Task.isCancelled else { return }
+            if self?.display?.view.hideSoftKeyboardIfFocusUnchanged(since: focusEpoch) == true {
+                self?.log.info("soft keyboard hidden: typing on the Mac keyboard")
+            }
+        }
     }
 
     func setSoftKeyboard(_ on: Bool) async {
@@ -790,13 +814,16 @@ final class InstanceSession: Identifiable {
     /// After a tap with the keyboard turned off: close the IME if the tap focused a text field.
     func pointerUp(x: Int, y: Int) {
         lastTap = (x, y)
-        guard !softKeyboardEnabled, let client else { return }
+        guard !softKeyboardEnabled, let client, let epoch = display?.view.focusEpoch else { return }
         keyboardEnforceTask?.cancel()
-        keyboardEnforceTask = Task {
+        keyboardEnforceTask = Task { [weak self] in
             for delay in [600, 900] {
                 try? await Task.sleep(for: .milliseconds(delay))
                 guard !Task.isCancelled else { return }
-                if (try? await SoftKeyboard(shell: client).enforceHidden()) == true { return }
+                guard let st = try? await SoftKeyboard(shell: client).state(), st.imeShown else { continue }
+                // BACK on the input stream, and only if no other click/focus key came since this tap.
+                _ = self?.display?.view.hideSoftKeyboardIfFocusUnchanged(since: epoch)
+                return
             }
         }
     }
