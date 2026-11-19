@@ -121,8 +121,10 @@ public struct SDKLocator: Sendable {
         let tool = sdk?.sdkManagerPath ?? "sdkmanager"
         return """
         No Google Play system image for arm64 is installed. Install one with:
-          \(tool) "\(wanted.sdkManagerPackage)"
-        (accept the licence when prompted; about 2.5 GB). Only google_apis_playstore images include the Play Store.
+          emuu images install \(wanted.androidVersion?.number ?? wanted.apiDirectory)
+        or: \(tool) "\(wanted.sdkManagerPackage)"
+        (accept the licence when prompted; about 2 GB). Only google_apis_playstore images include the Play Store.
+        `emuu images list` shows the Android versions Emuu supports.
         """
     }
 

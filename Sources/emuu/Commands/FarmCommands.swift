@@ -144,6 +144,7 @@ struct GoldenCreate: AsyncParsableCommand {
     @Option(help: "vCPUs per device.") var cores: Int = FarmProfile.cores
     @Option(help: "GPU mode (host, swiftshader_indirect, …).") var gpu: GPUMode = FarmProfile.gpu
     @Option(help: "System image tag: google_apis_playstore (default), google_apis or default, if installed.") var image: String?
+    @Option(help: "Android version (API level) of the golden, e.g. 35 (default: the default image, see `emuu images list`). Its devices keep it.") var android: String?
     @Flag(help: "Disable preinstalled apps tests do not need (see `emuu golden seal --help`).") var lean = false
     @Flag(help: "Seal right away (after the minimum uptime) instead of leaving it running for manual setup.") var seal = false
     @Flag(help: "JSON output (with --seal: the golden record).") var json = false
@@ -162,13 +163,24 @@ struct GoldenCreate: AsyncParsableCommand {
         } else {
             let images = ctx.engines.installedImages.filter { $0.ref.abi == "arm64-v8a" }
             let wanted = image ?? "google_apis_playstore"
-            guard let img = images.first(where: { $0.ref.tag == wanted }) else {
-                throw CLIError("No arm64 \(wanted) image installed (installed: \(images.map(\.description).joined(separator: ", ").ifEmpty("none"))).")
+            let img: InstalledSystemImage
+            if wanted == "google_apis_playstore" {
+                do { img = try SystemImageCatalog.resolve(android, installed: images) } catch { throw CLIError(describe(error)) }
+            } else {
+                let version = try android.map { text -> AndroidVersion in
+                    guard let v = AndroidVersion(text) else { throw CLIError("'\(text)' is not an Android version.") }
+                    return v
+                }
+                let matching = images.filter { $0.ref.tag == wanted && (version == nil || $0.ref.androidVersion == version) }
+                guard let first = matching.first else {
+                    throw CLIError("No arm64 \(wanted) image\(version.map { " for API \($0.number)" } ?? "") installed (installed: \(images.map(\.description).joined(separator: ", ").ifEmpty("none"))).")
+                }
+                img = first
             }
             var config = InstancePreset.lite.makeConfig(id: id, systemImage: img.ref, gpu: gpu, audioOutput: false)
             config.ramMB = ram
             config.cores = cores
-            // The engine raises userdata to 6 GiB for android-36.1 on first boot anyway (and rewrites config.ini).
+            // The engine raises userdata to 6 GiB on first boot anyway (measured for android-36.1; it rewrites config.ini).
             config.dataPartitionMB = 6144
             config.guestRAMEnforced = ram < 2048 ? true : nil
             config.automationMode = true

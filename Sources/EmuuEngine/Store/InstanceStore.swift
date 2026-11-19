@@ -110,6 +110,7 @@ public final class InstanceStore: Sendable {
                 throw EmuuError.instanceNotFound(config.id)
             }
             guard !isRunning(config.id) else { throw EmuuError.invalidStateTransition(from: .running, action: "reconfigure") }
+            if let existing = try? load(config.id) { try Self.checkSameImage(existing: existing.systemImage, requested: config.systemImage) }
             let tagDisplay = try checkImage(config.systemImage)
             try writeAVDFiles(config, tagDisplay: tagDisplay)
             try Self.encode(config, to: paths.instanceConfigFile(for: config.id))
@@ -123,7 +124,9 @@ public final class InstanceStore: Sendable {
     public func updatePreferences(_ id: InstanceID, _ change: (inout InstanceConfig) -> Void) throws -> InstanceConfig {
         try lock.withLock { _ in
             var config = try load(id)
+            let image = config.systemImage
             change(&config)
+            try Self.checkSameImage(existing: image, requested: config.systemImage)
             try Self.encode(config, to: paths.instanceConfigFile(for: id))
             return config
         }
@@ -192,8 +195,11 @@ public final class InstanceStore: Sendable {
                 config.displayName = displayName ?? target.rawValue
                 config.ports = nil
                 config.createdAt = Self.wholeSeconds(Date())
+                let image = config.systemImage
                 configure(&config)
                 config.id = target
+                // A clone's disks are the source's, so it runs the source's Android version.
+                try Self.checkSameImage(existing: image, requested: config.systemImage)
                 let tagDisplay = try checkImage(config.systemImage)
                 try writeAVDFiles(config, tagDisplay: tagDisplay)
                 if includeSnapshots, var ini = try? IniFile(contentsOf: srcDir.appendingPathComponent("config.ini")) {
@@ -260,6 +266,16 @@ public final class InstanceStore: Sendable {
     }
 
     // MARK: Helpers
+
+    /// An instance's Android version cannot change in place: its data partition (and snapshots) were created by
+    /// that system image, and booting them with another one fails or corrupts them (pure; unit-tested).
+    public static func checkSameImage(existing: SystemImageRef, requested: SystemImageRef) throws {
+        guard existing != requested else { return }
+        throw EmuuError.invalidConfiguration(
+            "an instance's Android version cannot be changed (it runs \(existing.androidLabel), \(existing.sdkManagerPackage)); "
+            + "its data partition belongs to that version. Create a new instance with `emuu create <name> --android "
+            + "\(requested.androidVersion?.number ?? requested.apiDirectory)` instead")
+    }
 
     private func checkImage(_ image: SystemImageRef) throws -> String? {
         guard let sdk else { return nil }

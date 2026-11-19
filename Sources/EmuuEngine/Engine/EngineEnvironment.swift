@@ -60,21 +60,28 @@ public final class EngineEnvironment: Sendable {
 
     /// Installed images, best first, and the preferred one (Play Store arm64 if present).
     public var installedImages: [InstalledSystemImage] { SDKLocator.installedImages(in: sdk) }
-    public var preferredImage: InstalledSystemImage? { SDKLocator.preferredImage(in: sdk) }
+    /// The image new instances get when no Android version is chosen: `SystemImageCatalog.defaultImage`
+    /// (Android 16 QPR2 / API 36.1 when installed), else the best other installed image.
+    public var preferredImage: InstalledSystemImage? {
+        let all = installedImages
+        return SystemImageCatalog.defaultImage(installed: all) ?? all.first { $0.ref.abi == "arm64-v8a" }
+    }
+    /// Installed Google Play arm64 images (the ones Emuu creates instances from), newest first.
+    public var playStoreImages: [InstalledSystemImage] { SystemImageCatalog.installed(from: installedImages) }
 
     /// Text telling the user how to install a Play Store image, or nil when one is installed.
     public var missingPlayStoreImageAdvice: String? {
         installedImages.contains { $0.hasPlayStore && $0.ref.abi == "arm64-v8a" } ? nil : SDKLocator.missingImageAdvice(sdk: sdk)
     }
 
-    /// Creates an instance from a preset, using the preferred installed image.
+    /// Creates an instance from a preset with `image` (default: `preferredImage`).
     @discardableResult
     public func createInstance(id: InstanceID, preset: InstancePreset = .standard, displayName: String? = nil,
-                               ports: InstancePorts? = nil) throws -> InstanceConfig {
-        guard let image = preferredImage else {
+                               ports: InstancePorts? = nil, image: SystemImageRef? = nil) throws -> InstanceConfig {
+        guard let ref = image ?? preferredImage?.ref else {
             throw EmuuError.systemImageMissing(path: SDKLocator.missingImageAdvice(sdk: sdk))
         }
-        return try store.create(preset.makeConfig(id: id, displayName: displayName, systemImage: image.ref, ports: ports))
+        return try store.create(preset.makeConfig(id: id, displayName: displayName, systemImage: ref, ports: ports))
     }
 
     /// Deletes an instance after stopping its engine (graceful, no save).

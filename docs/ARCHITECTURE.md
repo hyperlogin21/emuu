@@ -25,7 +25,7 @@ in `Sources/EmuuBase` and are the only things modules share.
 | SDK | `~/Library/Android/sdk` (search order in `SDKDiscovery.candidateRoots`: `$ANDROID_HOME`, `$ANDROID_SDK_ROOT`, `~/Library/Android/sdk`) |
 | Engine | `emulator/emulator` v36.4.9 |
 | adb | `platform-tools/adb`, also `/opt/homebrew/bin/adb` (`SDKDiscovery.fallbackADBPaths`) |
-| Image | `system-images/android-36.1/google_apis_playstore/arm64-v8a` (`SystemImageRef.playStoreDefault`) |
+| Image | Default `system-images/android-36.1/google_apis_playstore/arm64-v8a` (`SystemImageRef.playStoreDefault`); per instance any installed Google Play arm64 image (`SystemImageCatalog`, see "Android versions") |
 | Emuu state | `~/.emuu` (`EmuuPaths`; override with `$EMUU_HOME`) |
 
 **Never touch `~/.android/avd` or the user's existing `Medium_Phone` AVD.** Emuu instances live in
@@ -163,7 +163,8 @@ protocol ProcessRunner: Sendable {
 | Type | Notes |
 | --- | --- |
 | `InstanceID` | Also the AVD name. `[A-Za-z0-9._-]{1,64}` starting with an alphanumeric. `init?(rawValue:)`, `init(validating:) throws`, `sanitized(from:)`. |
-| `SystemImageRef` | `apiDirectory/tag/abi`, `sdkRelativePath` (`image.sysdir.1` form, trailing `/`), `sdkManagerPackage`, `hasPlayStore`. `.playStoreDefault`. |
+| `SystemImageRef` | `apiDirectory/tag/abi`, `sdkRelativePath` (`image.sysdir.1` form, trailing `/`), `sdkManagerPackage`, `hasPlayStore`, `androidVersion`/`androidLabel`. `.playStoreDefault`, `.playStore(version)`. |
+| `AndroidVersion` | API level + minor (`35`, `36.1`), numeric equality/order (`37` == `37.0`). `init?(_:)` parses user input (`35`, `android-35`, `API 35`), `init?(apiDirectory:)` rejects `-extNN`/codenames; `marketingName` ("Android 16 QPR2"), `label`. |
 | `GPUMode` | Raw values are `-gpu` flag values: `auto host swiftshader_indirect angle_indirect guest`. |
 | `MemoryProfile` | `frugal / balanced / performance`, with `suggestedRAMMB` (2048/3072/4096) and `suggestedVMHeapMB` (228/256/512). Governor thresholds per profile are defined in EmuuMemory. |
 | `DisplaySpec` | width, height, density. Default `.lightweightPhone` is 720x1600 @ 320. |
@@ -505,6 +506,38 @@ Tools (all off by default) for "the window flickers / tears / shows black frames
   10 min), circuit breaker (3 attempts / 30 min → failed). Ladders per fault (`HealLadder`); interactive
   instances never restart automatically for informational faults (ANR dialog, disk full, completed reboot).
   The supervisor runs it with `--self-heal`; `emuu heal` runs one ladder pass; the pool daemon for its devices.
+
+## Android versions (`SystemImageCatalog`, `emuu images`, `create --android`)
+
+* **Catalogue** (`Sources/EmuuEngine/SDK/SystemImageCatalog.swift`, pure and unit-tested): Emuu creates instances only
+  from `google_apis_playstore` / `arm64-v8a` images in plain `android-<v>` directories (`isEmuuImage`; no `_ps16k`,
+  tablet, automotive, XR or `-extNN`). `supported` = 34, 35, 36, 36.1 with approximate download sizes;
+  `defaultImage` = 36.1 if installed, else the newest installed supported version, else the newest installed Play
+  image. `EngineEnvironment.preferredImage` uses it (falls back to the old preference order for non-Play images);
+  `resolve(_:installed:)` turns `--android` text into an installed image or a `ResolveError` naming the install
+  command. `parseSDKManagerList` reads `sdkmanager --list` (installed and available sections); `rows` merges
+  installed, offered and built-in entries with the instances using each, for `emuu images list`.
+* **CLI** (`Sources/emuu/Commands/ImagesCommands.swift`): `images list [--offline] [--json]`, `images install <v>
+  [--accept-licenses] [--allow-unsupported]` (runs `sdkmanager --sdk_root=<sdk> <package>` with the terminal attached
+  for its progress bar; licence prompts are answered by the user on a TTY, by "y" only with `--accept-licenses`, or
+  declined by EOF otherwise; success is judged from the disk — `system.img` present and `AndroidVersion.ApiLevel`
+  matching — because sdkmanager exits 0 after a declined licence), `images remove <v> [-y]` (`sdkmanager --uninstall`,
+  refused while instance records of this `EMUU_HOME` use the image; other homes and Android Studio AVDs are not
+  checked). `create --android`, `golden create --android`; `list` (ANDROID column), `status`, `doctor` (one check per
+  installed version: required files `system.img vendor.img ramdisk.img kernel-ranchu source.properties`, supported or
+  not, default, users; fails only for a damaged image an instance uses; no failure when 36.1 is absent but another
+  Play image is installed).
+* **Fixed per instance:** the version lives in `InstanceConfig.systemImage` (already in every record; no migration).
+  `InstanceStore.checkSameImage` makes `update`, `updatePreferences` and `clone(configure:)` refuse to change it
+  (`invalidConfiguration` with the reason: userdata and snapshots belong to the image). Clones, farm goldens and
+  their devices copy the source's record and so keep its version. `EngineInstance.performStart` refuses to launch
+  when the instance's image directory is gone, naming `emuu images install <v>`.
+* **App:** the create sheet lists installed versions (`AppModel.androidVersionChoices`, default preselected) and
+  names the Terminal command for supported versions that are not installed (no in-app download: the licence
+  belongs in `emuu images install`); the library row shows the marketing name.
+* **API-specific code paths** were checked: the only version assumptions left are comments recording where a
+  measurement was taken (36.1 RAM floor, 6 GiB userdata, Gboard/keyboard findings). Behaviour verified on API 35:
+  see engine-findings "Android versions".
 
 ## Instance-to-instance clone (`emuu clone-instance`, library "Clone…")
 

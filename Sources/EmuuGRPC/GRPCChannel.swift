@@ -31,6 +31,11 @@ public struct GRPCStatus: Error, Sendable, Hashable, CustomStringConvertible {
     }
 }
 
+extension GRPCStatus: LocalizedError {
+    /// So `localizedDescription` names the status instead of "The operation couldn’t be completed".
+    public var errorDescription: String? { description }
+}
+
 /// One gRPC call on an HTTP/2 stream: reassembles length-prefixed messages and reports the final status.
 final class GRPCCall: HTTP2StreamDelegate, @unchecked Sendable {
     private let lock = NSLock()
