@@ -65,13 +65,12 @@ public final class EmulatorDisplayController {
         view.sendInput = { events in session.send(events) }
         view.pressKey = { key in session.pressKey(key) }
         view.onRotate = { [weak self] in self?.rotate() }
-        view.setDeviceClipboard = { text, paste in
-            Task { try? await session.setClipboard(text, paste: paste) }
-        }
-        view.requestDeviceCopy = { cut in
-            // Ctrl+C / Ctrl+X in the focused field; the clipboard stream brings the result to the host.
-            let key: UInt16 = cut ? 0x07 : 0x08   // kVK_ANSI_X / kVK_ANSI_C
-            session.send([.key(.macKey(0x3B, .keydown)), .key(.macKey(key, .keypress)), .key(.macKey(0x3B, .keyup))])
+        // Typed text the guest keyboard cannot type, and ⌘V, go through the guest clipboard (TypingSequencer).
+        // ⌘C/⌘X send Ctrl+C/Ctrl+X; the clipboard stream brings the result to the Mac (`handle(.clipboardChanged)`).
+        view.typing.setClipboard = { text in try await session.setClipboard(text, paste: false) }
+        view.typing.getClipboard = { try await session.clipboard() }
+        view.typing.onPasteFailed = { [weak self] error in
+            self?.logger.warning("paste to device failed: \(error.localizedDescription)")
         }
         view.onUserInteraction = { [weak self] in
             guard let self, let id = self.instanceID else { return }

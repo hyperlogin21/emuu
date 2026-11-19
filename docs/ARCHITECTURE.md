@@ -358,6 +358,42 @@ AVD tuning (EmuuEngine config generation):
   `unstableFrames`. Cost ≈ +0.5 ms per 720x1600 frame and ≈ +3.5 % of one core at 60 fps. It cannot detect an engine
   writer that was paused mid-frame for the whole read-and-compare. `EMUU_DISPLAY_SHM_VALIDATE=0` turns it off
   (diagnostics only).
+* **Keyboard and text input** (`EmuuDisplay/Input/KeyMapping.swift`, `TypingSequencer.swift`,
+  `View/EmulatorDisplayView+TextInput.swift`; README "Typing"). The device view is an `NSTextInputClient`.
+  * *Route* (`KeyEventTranslator.route`): while an input method composes, every key goes to macOS text input;
+    otherwise ⌘ chords are the view's or the menus' (`commandAction`), Shift/Control are forwarded as held
+    modifiers, ⌃ chords and non-character keys (arrows, Return, Tab, ⌫, ⌦, Esc, Home/End/Page Up/Down) go
+    **by key**, and everything else goes through `interpretKeyEvents`, so the layout, dead keys, press-and-hold,
+    the emoji picker and input methods produce the **text**.
+  * *Text → guest* (`typed`): each character Android's US key map can type becomes that key (+ Shift adjusted
+    around it, the user's held Shift lifted if needed); a single character from a key is held while the Mac key is
+    held. Anything else (é, 中文, emoji) and any single text longer than 64 characters is **pasted**: guest
+    clipboard set, Ctrl+V, previous guest clipboard restored after 0.6 s of quiet. ⌘V pastes the Mac clipboard the
+    same way and leaves it in the guest clipboard; ⌘C/⌘X send Ctrl+C/Ctrl+X and the clipboard stream copies the
+    result to the Mac.
+  * *Keys on the wire* are evdev codes (`KeyboardEvent.codeType = Evdev`). The engine's Mac key codes drop the A key
+    (kVK 0 = protobuf default) and the engine auto-repeats a held Mac key; the `text`/`key` fields mangle non-ASCII and
+    are not ordered with key codes. The guest keyboard is `qwerty2.kl` (phone layout): KEY_HOME is the HOME button,
+    KEY_END is ENDCALL (sleep), F-keys are MENU/CALL/ENDCALL or nothing, Page Up/Down and the keypad are unknown, the
+    grave key is 399 — so Home/End/Page keys are sent as Android's Alt+←/→/↑/↓ movements and F-keys are not sent.
+  * *Ordering and pacing* (`TypingSequencer`, every input event of the view goes through it): key-downs at least 5 ms
+    apart in bursts (back-to-back presses were dropped), pastes wait 250 ms after the previous Ctrl+V before
+    changing the clipboard (Android reads it when it handles the key), and keys that Gboard handles (characters) vs
+    keys that go straight to the app (arrows, chords, Return, BACK) are separated by 80 ms, with ⌫ waiting for both
+    — otherwise either path overtakes the other. A lone Shift tap is inserted before an app key when the field's
+    Shift is "sticky" (a Shift press whose letter Gboard took looks like a lone tap to `MetaKeyKeyListener`, and
+    the next ← would select).
+  * *Key-up bookkeeping*: the translator knows every key it holds in the guest; key-up releases it, ⌘ going down
+    releases held characters (macOS sends no key-up under ⌘), focus loss / window resigning key / app deactivation
+    release everything, and Shift/Control are reconciled with the event's flags on every key.
+  * *Focus*: a click, the window becoming key or opening it makes the view first responder (unless a text field
+    has focus); strip buttons are not focusable.
+  * *Soft keyboard*: the view reports the start of Mac typing (`onMacTyping`); `InstanceSession` checks
+    `dumpsys input_method` and sends BACK on the input stream only if no click or Return/Tab/Esc happened since
+    (`hideSoftKeyboardIfFocusUnchanged`). Gboard ignores `show_ime_with_hard_keyboard` for the emulator's built-in
+    keyboard, and `accessibility_soft_keyboard_mode` is reset by the system at once (both measured).
+  * Self-test: `EMUU_APP_SELFTEST=cycle:<id>:1 EMUU_APP_SELFTEST_ONLY=keyboard` with scripts/typing-test-apk
+    installed drives the view with synthesized events and checks the device's text and pressed-key state.
 * **Rotation.** `setPhysicalModel(ROTATION)` turns the virtual device (sensors), with Android's auto-rotate set on
   attach; frames arrive rotated, the window re-aspects, and touches are mapped back to physical panel coordinates
   (`DeviceTouchMapper`). Portrait-locked apps (the phone launcher) appear sideways, as on a real phone.

@@ -25,6 +25,7 @@ import EmuuDisplay
 /// * `EMUU_APP_SELFTEST_HIBERNATE=1`: after the cycles, start a recording, hibernate from the app and check that
 ///   the window closes by itself (recording finalised, session detached, library row hibernated), then reopen
 ///   it from the library path and time the resume. The engine is left running.
+/// * `EMUU_APP_SELFTEST_ONLY=keyboard`: only the keyboard/text-input scenarios (KeyboardSelfTest.swift).
 /// Results go to stdout and `~/.emuu/logs/app-selftest.txt`.
 @MainActor
 final class SelfTestRunner {
@@ -84,6 +85,8 @@ final class SelfTestRunner {
 
             if env["EMUU_APP_SELFTEST_ONLY"] == "none" {
                 // open/close cycles only
+            } else if cycle == 1, env["EMUU_APP_SELFTEST_ONLY"] == "keyboard" {
+                await KeyboardSelfTest(model: model, report: report).run(session)
             } else if cycle == 1, env["EMUU_APP_SELFTEST_ONLY"] == "native" {
                 await exerciseNativeDisplay(session)
             } else if cycle == 1 {

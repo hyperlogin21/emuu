@@ -287,6 +287,40 @@ docs/evidence/video-decoder-2026-11-19.txt. CPU ±30 % (another agent's emulator
   `hardware` stays available per instance (`emuu video-decoder hardware`) for heavy high-bitrate 1080p60 HEVC,
   where VideoToolbox is clearly better.
 
+## Keyboard input (measured 2026-11-19, engine 36.4.9, android-36.1 Play Store image, Gboard)
+
+Measured with a test app that logs key events and its text (scripts/typing-test-apk) and `getevent` on the guest.
+
+* **`KeyboardEvent{codeType: Mac}` drops the A key**: kVK_ANSI_A is 0, the proto3 default, so no key code reaches
+  the engine. A Mac key held down this way is **auto-repeated by the engine** (4 s held → 75 characters; one stuck
+  key typed 362). Evdev codes (`codeType: Evdev`) have neither problem; a held evdev key is not repeated.
+* **`text` field**: printable ASCII works, "é" arrives as "-", "ü中😀" and the W3C `key` "é" arrive as nothing;
+  `text` events and key-code events on the same input stream are **not ordered** relative to each other
+  ("ab" + paste + "cd" came out "añbc…").
+* **Guest keyboard = `qwerty2.kl`, a phone layout** (key-by-key, Android keycode seen by the app): KEY_ESC → BACK,
+  KEY_HOME (102) → HOME button, KEY_END (107) → ENDCALL (sleeps the device), F1/F10 → MENU, F2 → SOFT_RIGHT,
+  F3 → CALL, F4 → ENDCALL, F5–F9/F11/F12, Page Up/Down, Insert, the keypad (incl. keypad Enter), KEY_102ND and
+  KEY_GRAVE (41) → UNKNOWN; the grave/tilde key is **399**; KEY_BACK (158), KEY_DELETE (111 → FORWARD_DEL), arrows,
+  Ctrl/Alt/Shift left and right, Tab, Space, Enter work. Android's Alt+←/→ (line start/end) and Alt+↑/↓ (start/end of
+  text) work in EditText.
+* **Bursts are dropped**: 200 key presses back to back arrived as 168–192 characters; with ≥ 1 ms between presses
+  all 200 arrived (5 ms is used).
+* **Gboard takes character keys from the hardware keyboard** (their key-downs never reach the app, shown or hidden
+  soft keyboard) and commits text asynchronously, while arrows, Ctrl/Alt chords, Return and BACK go straight to the
+  app. Within ~10–25 ms of each other one path overtakes the other ("bc" ⌥← "a" → "cab"/"abc" mixed); 50 ms apart,
+  4/4 runs correct. Backspace goes either way (Gboard while it composes).
+* **Sticky Shift**: because the app never sees the letter of Shift+X, its `MetaKeyKeyListener` takes the Shift press
+  for a lone tap and keeps Shift sticky: "abcX" ← "a" gave "abca" (← selected the X). Each lone Shift tap toggles it;
+  one more tap before the arrow gave the right "abcaX".
+* **Clipboard paste**: `setClipboard` then Ctrl+V. Android reads the clipboard when it handles the key, so setting
+  the next value 0 ms after Ctrl+V pasted the *next* value for both; ≥ 60 ms after Ctrl+V was right in all runs
+  (250 ms is used). 2 000 mixed characters (ü, 中, 😀) paste exactly.
+* **Soft keyboard**: Gboard shows its keyboard for every focused field although the device has a QWERTY hardware
+  keyboard (`keysexposed`) and `show_ime_with_hard_keyboard=0` (the framework honours it:
+  `SettingsObserver{mShowImeWithHardKeyboard=1}` is the FALSE enum value); `qwerty2` is the built-in keyboard
+  (device 0, bus 6), which Gboard does not treat as a physical keyboard. `accessibility_soft_keyboard_mode=1` is
+  reset to 0 by the system immediately. BACK (evdev 158) while it is shown closes only the IME.
+
 ## Spontaneous guest restart after a quick-boot load (observed, cause open)
 
 * On `agent-test` (2026-11-19 00:09 UTC), a quick-boot resume restarted the guest kernel by itself ~2–8 s after

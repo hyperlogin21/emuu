@@ -1,0 +1,100 @@
+Keyboard / text input audit, 2026-11-19 — engine 36.4.9, android-36.1 google_apis_playstore, Gboard, scratch instance (EMUU_HOME isolated).
+Field contents are from scripts/typing-test-apk (dev.emuu.typetest, read with run-as); 'pressed' is the guest keyboard's KeyState from dumpsys input.
+
+== BEFORE: origin/main key translator + view logic replayed through the engine's gRPC input stream (paced 3 ms per key-down, like the new code) ==
+   (an unpaced replay lost more: fast-2000 arrived as 573/2000 characters)
+BEFORE PASS [ASCII] lowercase: expected "the quick brown fox jumps over the lazy dog" got "the quick brown fox jumps over the lazy dog" pressed=<none>
+BEFORE FAIL [ASCII] uppercase: expected "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG" got "THE QUICK BROWN FOX JUMPS OVER THE LZY DOG" pressed=<none>
+BEFORE PASS [ASCII] digits: expected "0123456789" got "0123456789" pressed=<none>
+BEFORE FAIL [ASCII] symbols-unshifted: expected "-=[]\;',./`" got "-=[]\;',./" pressed=<none>
+BEFORE FAIL [ASCII] symbols-shifted: expected "!@#$%^&*()_+{}|:"<>?~" got "!@#$%^&*()_+{}|:"<>?" pressed=<none>
+BEFORE FAIL [ASCII] space-return: expected "a b⏎c" got " b⏎c" pressed=<none>
+BEFORE FAIL [ASCII] keypad: expected "120*+-/.=⏎x" got "x" pressed=<none>
+BEFORE FAIL [Editing] backspace: expected "hel" got "hll" pressed=<none>
+BEFORE FAIL [Editing] arrows: expected "abXcdY" got "cdXYb" pressed=<none>
+BEFORE FAIL [Editing] capital-then-arrow: expected "abcaX" got "bX" pressed=<none>
+BEFORE FAIL [Editing] forward-delete: expected "abd" got "bc" pressed=<none>
+BEFORE FAIL [Editing] home-end: expected "abcd" got "cbd" pressed=<none>
+BEFORE FAIL [Editing] page-up-down: expected "Xa⏎b⏎cY" got "⏎b⏎cXY" pressed=<none>
+BEFORE FAIL [Repeat] hold-backspace: expected "abc" got "bcdfgh" pressed=<none>
+BEFORE FAIL [Repeat] hold-letter: expected "kkkkk" got "k" pressed=<none>
+BEFORE FAIL [Repeat] hold-arrow: expected "abcXdef" got "bcefXd" pressed=<none>
+BEFORE FAIL [Editing] shift-arrow-select: expected "hello X" got "hellowX" pressed=<none>
+BEFORE FAIL [Editing] option-arrow-word: expected "one Xtwo" got "one woXt" pressed=<none>
+BEFORE FAIL [Editing] option-delete-word: expected "one " got "onetwo" pressed=<none>
+BEFORE FAIL [Shortcuts] cmd-a: expected "Z" got "bcZ" pressed=<none>
+BEFORE FAIL [Shortcuts] cmd-z-undo: expected "abc" got "bcXz" pressed=<none>
+BEFORE FAIL [Shortcuts] cmd-left-right: expected "abcd" got "cbd" pressed=<none>
+BEFORE FAIL [Shortcuts] cmd-shift-left: expected "X" got "bcdefX" pressed=<none>
+BEFORE FAIL [Shortcuts] cmd-delete: expected "" got "bc df" pressed=<none>
+BEFORE PASS [Shortcuts] cmd-v-mac-clipboard: expected "<Grüße, 你好 😀 — ok>" got "<Grüße, 你好 😀 — ok>" pressed=<none>
+BEFORE PASS [Shortcuts] cmd-c-to-mac: expected "copy me" got "copy me" pressed=<none> NOTE: Mac clipboard not checked in the before-probe
+BEFORE FAIL [Shortcuts] cmd-x-to-mac: expected "" got "cut me" pressed=<none> NOTE: Mac clipboard not checked in the before-probe
+BEFORE FAIL [Shortcuts] ctrl-a: expected "Q" got "bcQ" pressed=<none>
+BEFORE FAIL [Non-ASCII] dead-keys: expected "éñü!" got "!" pressed=<none> NOTE: no NSTextInputClient before (input methods, press-and-hold, emoji picker unsupported)
+BEFORE FAIL [Non-ASCII] dead-keys-tsm: expected "éñü!" got "eennuu!" pressed=<none>
+BEFORE FAIL [Non-ASCII] option-letters: expected "åß™" got "" pressed=<none>
+BEFORE FAIL [Non-ASCII] press-and-hold: expected "café!" got "cfe!" pressed=<none> NOTE: no NSTextInputClient before (input methods, press-and-hold, emoji picker unsupported)
+BEFORE FAIL [Non-ASCII] emoji-picker: expected "hi 😀👍🏽🇫🇷." got "hi ." pressed=<none> NOTE: no NSTextInputClient before (input methods, press-and-hold, emoji picker unsupported)
+BEFORE FAIL [Non-ASCII] ime-pinyin: expected "你好世界!" got "!" pressed=<none> NOTE: no NSTextInputClient before (input methods, press-and-hold, emoji picker unsupported)
+BEFORE FAIL [Non-ASCII] ime-japanese: expected "漢字です" got "" pressed=<none> NOTE: no NSTextInputClient before (input methods, press-and-hold, emoji picker unsupported)
+BEFORE FAIL [Layouts] layout-azerty: expected "az&1é,m" got "qw&!mm" pressed=<none>
+BEFORE FAIL [Layouts] layout-qwertz: expected "zyß/@" got "yz?@" pressed=<none>
+BEFORE FAIL [Speed] fast-2000: expected .g*]k,&YY~)V^|J^gf.@o-g;N2ztXN…(2000) got .g*]k,&YY)V^|J^gf.@o-g;N2ztXN>…(1921) pressed=<none>
+BEFORE PASS [Speed] paste-2000: expected Grüße, 你好 😀 naïve — 東京 ok! Grü…(2000) got Grüße, 你好 😀 naïve — 東京 ok! Grü…(2000) pressed=<none>
+BEFORE FAIL [Speed] ime-commits-burst: expected 東京タワーok 東京タワーok 東京タワーok 東京タワーo…(160) got "" pressed=<none> NOTE: no NSTextInputClient before (input methods, press-and-hold, emoji picker unsupported)
+BEFORE FAIL [Stuck keys] resign-key-mid-press: expected "w" got "w" pressed=KEY_W, KEY_DOWN
+BEFORE FAIL [Stuck keys] deactivate-mid-press: expected "A" got "" pressed=KEY_LEFTSHIFT
+BEFORE FAIL [Stuck keys] modifier-released-first: expected "Ab" got "b" pressed=<none>
+BEFORE FAIL [Stuck keys] command-pressed-mid-key: expected "w" got wwwwwwwwwwwwwwwwwwwwwwwwwwwwww…(364) pressed=KEY_W
+
+== AFTER: release Emuu.app, EMUU_APP_SELFTEST_ONLY=keyboard (synthesized NSEvents / NSTextInputClient calls into the device view; screen locked) ==
+KEYTEST PASS [ASCII] lowercase: "the quick brown fox jumps over the lazy dog" pressed=<none>
+KEYTEST PASS [ASCII] uppercase: "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG" pressed=<none>
+KEYTEST PASS [ASCII] digits: "0123456789" pressed=<none>
+KEYTEST PASS [ASCII] symbols-unshifted: "-=[]\;',./`" pressed=<none>
+KEYTEST PASS [ASCII] symbols-shifted: "!@#$%^&*()_+{}|:"<>?~" pressed=<none>
+KEYTEST PASS [ASCII] space-return: "a b⏎c" pressed=<none>
+KEYTEST PASS [ASCII] keypad: "120*+-/.=⏎x" pressed=<none>
+KEYTEST PASS [Editing] backspace: "hel" pressed=<none>
+KEYTEST PASS [Editing] arrows: "abXcdY" pressed=<none>
+KEYTEST PASS [Editing] capital-then-arrow: "abcaX" pressed=<none>
+KEYTEST PASS [Editing] forward-delete: "abd" pressed=<none>
+KEYTEST PASS [Editing] home-end: "abcd" pressed=<none>
+KEYTEST PASS [Editing] page-up-down: "Xa⏎b⏎cY" pressed=<none>
+KEYTEST PASS [Repeat] hold-backspace: "abc" pressed=<none>
+KEYTEST PASS [Repeat] hold-letter: "kkkkk" pressed=<none>
+KEYTEST PASS [Repeat] hold-arrow: "abcXdef" pressed=<none>
+KEYTEST PASS [Editing] shift-arrow-select: "hello X" pressed=<none>
+KEYTEST PASS [Editing] option-arrow-word: "one Xtwo" pressed=<none>
+KEYTEST PASS [Editing] option-delete-word: "one " pressed=<none>
+KEYTEST PASS [Shortcuts] cmd-a: "Z" pressed=<none>
+KEYTEST PASS [Shortcuts] cmd-z-undo: "abc" pressed=<none>
+KEYTEST PASS [Shortcuts] cmd-left-right: "abcd" pressed=<none>
+KEYTEST PASS [Shortcuts] cmd-shift-left: "X" pressed=<none>
+KEYTEST PASS [Shortcuts] cmd-delete: "" pressed=<none>
+KEYTEST PASS [Shortcuts] cmd-v-mac-clipboard: "<Grüße, 你好 😀 — ok>" pressed=<none>
+KEYTEST PASS [Shortcuts] cmd-c-to-mac: "copy me" pressed=<none>
+KEYTEST PASS [Shortcuts] cmd-x-to-mac: "" pressed=<none>
+KEYTEST PASS [Shortcuts] ctrl-a: "Q" pressed=<none>
+KEYTEST PASS [Non-ASCII] dead-keys: "éñü!" pressed=<none>
+KEYTEST FAIL [Non-ASCII] dead-keys-tsm: expected "éñü!" got "enu!" (lengths 4/4, first difference at 0: expected …éñü!… got …enu!…) pressed=<none>
+KEYTEST PASS [Non-ASCII] option-letters: "åß™" pressed=<none>
+KEYTEST PASS [Non-ASCII] press-and-hold: "café!" pressed=<none>
+KEYTEST PASS [Non-ASCII] emoji-picker: "hi 😀👍🏽🇫🇷." pressed=<none>
+KEYTEST PASS [Non-ASCII] ime-pinyin: "你好世界!" pressed=<none>
+KEYTEST PASS [Non-ASCII] ime-japanese: "漢字です" pressed=<none>
+KEYTEST PASS [Layouts] layout-azerty: "az&1é,m" pressed=<none>
+KEYTEST PASS [Layouts] layout-qwertz: "zyß/@" pressed=<none>
+KEYTEST PASS [Speed] fast-2000: .g*]k,&YY~)V^|J^gf.@o-g;N2ztXN>u~(/8b.=o…(2000 chars) pressed=<none>
+KEYTEST PASS [Speed] paste-2000: Grüße, 你好 😀 naïve — 東京 ok! Grüße, 你好 😀 n…(2000 chars) pressed=<none>
+KEYTEST PASS [Speed] ime-commits-burst: 東京タワーok 東京タワーok 東京タワーok 東京タワーok 東京タワーok …(160 chars) pressed=<none>
+KEYTEST PASS [Stuck keys] resign-key-mid-press: "w" pressed=<none>
+KEYTEST PASS [Stuck keys] deactivate-mid-press: "A" pressed=<none>
+KEYTEST PASS [Stuck keys] modifier-released-first: "Ab" pressed=<none>
+KEYTEST PASS [Stuck keys] command-pressed-mid-key: "w" pressed=<none>
+KEYTEST PASS [Focus] focus-on-key-window=true focus-on-click=true typed-after-click="ok"
+KEYTEST PASS [Shortcuts] menu-shortcuts-not-swallowed (⌘Q ⌘W ⌘M ⌘, ⌘H ⌘K ⌘I ⌘0 ⌥⌘R ⌥⌘C ⌥⌘N ⇧⌘S ⇧⌘A ⇧⌘P ⇧⌘M ⌃⌘Space) claimed=[]
+KEYTEST PASS [Soft keyboard] tap[shown=true] typing-on-mac[shown=false] text="abc" button[shown=true enabled=true]
+KEYTEST PASS [Editing] escape-is-back: first Esc closed keyboard=true second Esc left the app=true
+KEYTEST DONE passed=43 failed=1

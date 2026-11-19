@@ -26,7 +26,7 @@ struct ControlStrip: View {
                     StripButton(icon: "volume-up", fallback: "speaker.plus", label: "Volume up", shortcut: "⌘↑") { session.volumeUp() }
                     StripButton(icon: "volume-down", fallback: "speaker.minus", label: "Volume down", shortcut: "⌘↓") { session.volumeDown() }
                     StripButton(icon: "keyboard", fallback: "keyboard",
-                                label: session.softKeyboardEnabled ? "On-screen keyboard: on (click to hide)" : "On-screen keyboard: off (click to show)",
+                                label: session.softKeyboardEnabled ? "On-screen keyboard on: appears when you tap a text field, closes when you type on the Mac (click to show it, or to turn it off while shown)" : "On-screen keyboard off (click to show)",
                                 shortcut: "⌘K", isOn: session.softKeyboardEnabled, busy: session.keyboardBusy) {
                         session.toggleSoftKeyboard()
                     }
@@ -124,6 +124,7 @@ struct StripButton: View {
             }
         }
         .buttonStyle(StripButtonStyle(isOn: isOn))
+        .focusable(false)   // keyboard focus stays on the device screen, so typing continues after a click
         .help(shortcut.map { "\(label) (\($0))" } ?? label)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isOn ? .isSelected : [])
@@ -153,6 +154,7 @@ private struct RecordButton: View {
             }
         }
         .buttonStyle(StripButtonStyle(tint: recording ? .red : nil))
+        .focusable(false)
         .background(recording ? Color.red.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .help(recording ? "Stop recording (⌥⌘R)" : "Record the screen to an MP4 in ~/.emuu/recordings (⌥⌘R)")
         .accessibilityLabel(recording ? "Stop recording" : "Start recording")
@@ -180,6 +182,7 @@ private struct MemoryIndicator: View {
             }
         }
         .buttonStyle(StripButtonStyle(isOn: session.ui.showHUD))
+        .focusable(false)
         .frame(height: 50)
         .help("Memory: \(helpText) (⇧⌘M)")
         .accessibilityLabel("Memory HUD, \(helpText)")

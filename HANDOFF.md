@@ -70,6 +70,29 @@ Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub
   `emuu-dev2` switches to software decoding by itself (one cold boot; the signed-in account and data stay);
   `emuu video-decoder status emuu-dev2` confirms it, `emuu video-decoder hardware emuu-dev2` goes back.
 
+## Status update (2026-11-19, typing on the Mac keyboard)
+
+- **Reported:** "I can't fully type using the keyboard." Audited on an isolated instance with a typing test app
+  (scripts/typing-test-apk: logs key events, writes its text for `run-as`), the original key path replayed through
+  the engine, and a new app self-test (`EMUU_APP_SELFTEST=cycle:<id>:1 EMUU_APP_SELFTEST_ONLY=keyboard`). Before: the
+  **A key never arrived** (Mac key code 0 = protobuf default), `` ` ``/`~`, keypad, Home (= Android HOME button!),
+  End (= ENDCALL, sleeps the device), Page keys, ⌥/⌘ editing, ⌘A/⌘Z, dead keys, ⌥ characters, input methods, emoji
+  and other layouts did not work; a key held while ⌘ was pressed repeated forever (364 characters); focus loss left
+  keys stuck; fast typing lost keys. After: 43 of 44 typing scenarios and the focus, menu-shortcut, soft-keyboard and
+  Esc checks pass on the device (docs/evidence/keyboard-2026-11-19.txt); the failing one is explained below.
+- **Design** (docs/ARCHITECTURE.md "Keyboard and text input", README "Typing", engine-findings "Keyboard input"):
+  the view is an `NSTextInputClient`; characters go as the character (US key map), non-ASCII via the guest clipboard +
+  Ctrl+V (clipboard restored), non-character keys and ⌃ chords by key, all as evdev codes through `TypingSequencer`
+  (pacing, Gboard catch-up, sticky-Shift fix). Typing on the Mac hides Gboard's on-screen keyboard; the Keyboard
+  button shows it on demand.
+- **Not verified on screen:** the screen was locked, so real key presses, real input-method windows (Pinyin/Japanese
+  candidate windows, press-and-hold popup, emoji picker) and real dead-key composition by macOS were not exercised:
+  their NSTextInputClient calls were driven by the self-test, and synthesized dead-key events were *not* composed by
+  macOS in the background app (scenario `dead-keys-tsm` fails for that reason). The user should try: é via ⌥E E,
+  holding e, ⌃⌘Space emoji, Pinyin, Japanese, an AZERTY layout.
+- **Known limits:** F-keys/Insert/keypad keys do not exist on the emulator's Android keyboard; games get letters by
+  character (layout-dependent); ⌥ is never Alt; fields whose app ignores Ctrl+V paste get no non-ASCII text.
+
 ## Status update (2026-11-19, display flicker in HD video / TikTok)
 
 - **Reported:** flicker in HD video (TikTok) in the native display. Investigated on an isolated instance with a
@@ -133,7 +156,7 @@ The display agent described under "In progress" has finished; that section is no
 - **Guest reboot not root-caused.** It was not reproduced as caused by the kill tier; one of 7 resumes restarted the guest by itself right after a snapshot load. Reboots are now detected and logged with the governor's last 12 actions.
 - **`emuu-e2e` deletion:** the agent states it did not delete it; the log line is consistent with a delete from the app's library. The user has not yet said whether they did it.
 - **`emuu-dev2`** is the only instance. The user signed in to Google on it. It had a console port (5600) outside adb's scan range and could not boot; the `ports` entry was removed from `~/.emuu/instances/emuu-dev2.json` (backup beside it, `.bak-ports`). Its quick-boot snapshot was discarded, so the next start is a cold boot. Not yet booted since the fix.
-- **Not verified on screen:** minimise/restore with real window events, trackpad pinch/scroll, device-to-Mac clipboard. Non-ASCII typing from the Mac keyboard does not reach Android (paste works).
+- **Not verified on screen:** minimise/restore with real window events, trackpad pinch/scroll. (Device-to-Mac clipboard and non-ASCII typing: see the typing update above.)
 - **Next:** user relaunches `dist/Emuu.app` and tries sign-in screens, rotation and un-minimise; then start the automation-farm work below once the user answers the three farm questions.
 
 ## Goal
@@ -209,7 +232,7 @@ Observed at 08:30 local, from the file system only (no report yet): a new `Sourc
 
 - **`emuu-e2e` (which held the user's Google sign-in) no longer exists.** `~/.emuu/logs/emuu.log` records `deleted instance emuu-e2e` at 2026-11-18T23:32:29Z (07:32 local). The log does not show whether the app UI or the CLI did it. The display agent was told never to delete it and has been asked; the user has been asked too. Only `emuu-dev2` (the agent's test instance) is in `~/.emuu/avd`, and the user's app has had a window attached to it.
 - **No on-screen verification by agents.** They had no Screen Recording permission and the screen was locked, so window behaviour (un-minimise resume, the strip in a live window) is evidenced by unit tests and in-process renders only. The user needs to try these.
-- **Keyboard button is imperfect:** Android has no shell command to show or hide the IME. A field an app focuses by itself keeps its keyboard until the next tap.
+- **Keyboard button:** Android has no shell command to show or hide the IME; Emuu uses BACK while it is shown. Since the typing update it also closes as soon as you type on the Mac, and the button acts on what is on screen (see above).
 - **Instrumentation detection** in the governor is tested only against hand-written sample output.
 - **Strip memory percentage** stays empty until the HUD is opened when a CLI supervisor governs the instance.
 - **Long-run behaviour is unmeasured:** no multi-hour runs; balanced and performance profiles were not benchmarked.
