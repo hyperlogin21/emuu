@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var terminating = false
 
     private var selfTest: SelfTestRunner?
+    private var cloneTest: CloneSelfTest?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
@@ -51,6 +52,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let runner = SelfTestRunner(model: model)
             selfTest = runner
             runner.start()
+        }
+        if let spec = ProcessInfo.processInfo.environment["EMUU_APP_CLONETEST"] {
+            let runner = CloneSelfTest(model: model)
+            cloneTest = runner
+            runner.start(spec: spec)
         }
     }
 

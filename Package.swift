@@ -49,7 +49,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "EmuuApp",
-            dependencies: ["EmuuBase", "EmuuEngine", "EmuuADB", "EmuuMemory", "EmuuGRPC", "EmuuDisplay"],
+            dependencies: ["EmuuBase", "EmuuEngine", "EmuuADB", "EmuuMemory", "EmuuGRPC", "EmuuDisplay", "EmuuFarm"],
             // Control-strip icons (SVG, loaded by `IconLibrary`; scripts/make-app.sh copies the bundle).
             resources: [.copy("Resources/Icons")]
         ),

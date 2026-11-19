@@ -422,6 +422,41 @@ Tools (all off by default) for "the window flickers / tears / shows black frames
   instances never restart automatically for informational faults (ANR dialog, disk full, completed reboot).
   The supervisor runs it with `--self-heal`; `emuu heal` runs one ladder pass; the pool daemon for its devices.
 
+## Instance-to-instance clone (`emuu clone-instance`, library "Clone…")
+
+Copies an ordinary instance (Google sign-in, apps, settings) into a new one with the farm's machinery; pure logic in
+`Sources/EmuuFarm/InstanceClone.swift`, CLI in `Sources/emuu/Commands/CloneInstanceCommand.swift`, app in
+`Sources/EmuuApp/Model/AppModel+Clone.swift` + `Views/CloneInstanceSheet.swift`.
+
+* **Copy** = `InstanceCloner.clone` → `InstanceStore.clone(includeSnapshots:)` (clonefile of the AVD minus per-launch
+  files, the source's engine-written `config.ini` kept with `AvdId`/display name changed, each snapshot
+  `hardware.ini` rewritten). Then `sharedFiles` checks that no file of the clone is the same inode as (or a symlink
+  into) the source; the clone is deleted if one is. The qcow2 overlays name their backing files relatively
+  (`userdata-qemu.img`, verified with `qemu-img info`), so a clone never reads the source's directory. The clone's
+  record drops `goldenSource`/`discardStateOnExit`. A stub `default_boot` (`ram.bin` < 16 MiB) is not carried.
+* **Snapshot carried by default:** measured on the same source, the clone with the snapshot was adb-ready in 2.35 s
+  (engine: "Successfully loaded snapshot 'default_boot'", same guest boot id and uptime as the source at the save);
+  without it (`--cold-boot`) a cold boot took 10.7 s. Both had every marker. If the engine ever refuses the
+  snapshot it cold-boots from the same disks, so carrying it is never worse.
+* **Source state** (`CloneSourcePlan.decide`, pure): stopped/hibernated → copy now; running/frozen → refuse unless
+  the user consented (`--stop-source` / the sheet's "Hibernate, Clone & Resume"), then hibernate → copy → resume
+  (re-freeze if it was frozen); booting/stopping/hibernating/crashed → refuse; governed by another front end that
+  this caller cannot route through → refuse. Why hibernate: a running engine holds the qcow2 files open with
+  metadata cached in QEMU and guest data in RAM, and the engine has no "flush and keep running" for its disks; the
+  quick-boot save on console `kill` is its own consistent point (VM paused, RAM + devices saved, disk state as a
+  qcow2 internal snapshot, files closed), and resuming from it keeps the source's apps running. The CLI routes
+  hibernate/resume through `EngineCommand.perform` (supervisor if one runs); the app through `AppModel.finish(.hibernate)`
+  and `openWindow` (or the engine directly when no session is attached), and resumes even if the copy failed.
+* **Ports** (`ClonePorts.choose`): `--port` must be in 5554–5584, not fixed for another instance, and free; a
+  source with fixed ports gives the clone its own fixed port (`FarmPorts.allocate`, skipping ports other records
+  fix); otherwise nil like the source (picked at each launch). gRPC port and token are per launch anyway.
+* **Naming** (`CloneNaming`): the app proposes "<name> copy" (then "… 2"), the id is the sanitized name made unique
+  with "-2", "-3"; the CLI takes an explicit id and refuses a taken or invalid one.
+* **Identity:** Android ID, GSF id and account tokens are on the data partition and are copied unchanged; Emuu does
+  not touch them (README "Cloning an instance").
+* **App self-test:** `EMUU_APP_CLONETEST=<source>:<new name>` (`CloneSelfTest.swift`) opens the source, renders the
+  sheet, runs `cloneInstance`, waits for the source to stream again, hibernates it and quits.
+
 ## Security and safety
 
 * Emuu never modifies `~/.android`. The only exception is adb's own key files, which adb manages.

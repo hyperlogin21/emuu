@@ -106,6 +106,7 @@ With exactly one instance you can leave out the name. Otherwise use `-i <name>`,
 | `mem` | Live governor view (`--json`, `--once`, `--apps` for a per-app breakdown). `mem trim [--kill] [--level …]`, `mem reclaim`. |
 | `bench` | Cold boot, hibernate and resume times, plus idle footprint with and without the governor, as a Markdown table. |
 | `health`, `heal`, `reboot` | Health check, automatic recovery, soft/hard/cold reboot (see [Self-healing](#self-healing)). |
+| `clone-instance <source> <name>` | Copy an instance with everything on it, Google sign-in included (see [Cloning an instance](#cloning-an-instance)). `--stop-source`, `--cold-boot`, `--port`, `--display-name`, `--json`. |
 | `golden`, `clone`, `farm`, `run` | Automation farm (see [Automation farm](#automation-farm)). |
 
 Device commands wake the instance first: a frozen engine is thawed and a hibernated one resumed.
@@ -447,6 +448,45 @@ Recovery, smallest step first:
 
 Every detection and recovery is logged with time, reason, step and duration: `emuu health <instance> --history`
 (last 200, `logs/health-<id>.jsonl`) and `emuu farm status` (pool history and counters).
+
+## Cloning an instance
+
+Sign in to Google once, then make copies that are already signed in. In the app: the **…** menu of an instance in
+the library → **Clone…**, give the copy a name (proposed: "phone copy") and confirm; the copy appears in the list.
+On the command line:
+
+```sh
+emuu clone-instance phone phone2                 # phone is stopped or hibernated
+emuu clone-instance phone phone2 --stop-source   # phone is running: hibernated for the copy, then resumed
+emuu start phone2                                # resumes where phone was (~2.5 s)
+```
+
+* **What comes along:** the whole data partition and device state: Google account, Play Store state, installed apps
+  and their data, settings, files in shared storage, plus the quick-boot snapshot, so the copy resumes exactly where
+  the source was (`--cold-boot` drops the snapshot; the copy then boots Android from its disks, ~11 s).
+* **What is new:** the instance name and id, its own console/adb ports (when they start, or a new fixed port in
+  5554–5584 if the source has a fixed one; `--port` picks one), gRPC port and token, logs and run files. No file is
+  shared with the source: every file is an APFS clone with its own inode, and writes on either side stay there.
+* **Disk and time:** made with APFS `clonefile`, so it takes well under a second and no extra disk until the two
+  differ (measured: 1.8 MiB of private data right after the copy of a 3.5 GB instance; `du` still shows the full
+  apparent size for each, because it does not know the blocks are shared). On a volume without clone support
+  (not APFS) Emuu says so and makes a normal full copy.
+* **A running source** cannot be copied consistently: its disks are open and partly in memory. Emuu never copies a
+  live disk. The CLI refuses unless `--stop-source` is given; the app asks first ("phone is running. To copy it
+  safely, Emuu hibernates it for a few seconds…"). Then the source is hibernated (quick-boot snapshot saved, the
+  engine's own consistent point), copied and resumed from that snapshot: its apps continue where they were, and it
+  is paused for a few seconds (measured: 5.8 s in total from the CLI with a supervisor, 3.5 s from the app). A
+  source governed by an `emuu start` supervisor is hibernated and resumed through that supervisor (by
+  `emuu clone-instance --stop-source`; the app asks you to stop it or use that command). A frozen source
+  is frozen again afterwards (CLI). A source that is booting, stopping, or crashed last time is refused.
+
+**Same device, same account.** A clone keeps the source's Android identity: the Android ID, the Google services
+(GSF) id and the account tokens all live on the data partition, and that is what carries the sign-in across. Emuu
+does not change or randomise any of these. So **Google sees every copy as the same device and the same account.**
+Emuu cannot guarantee that Google keeps the session valid when several copies run at the same time (it may sign
+some of them out or ask to verify the device). This was **not tested with a real Google account**: the copies were
+checked with an installed app, changed settings, a file in shared storage and the Android ID, all of which came
+across unchanged.
 
 ## Play Store sign-in
 

@@ -31,7 +31,7 @@ struct EmuuCLI: ParsableCommand {
             Install.self, Apps.self, Launch.self, Uninstall.self, Playstore.self, Screenshot.self, Record.self, Rotate.self, Shell.self,
             Keyboard.self, Automation.self,
             Health.self, Reboot.self, Heal.self,
-            Golden.self, Clone.self, Farm.self, Run.self,
+            Golden.self, Clone.self, Farm.self, Run.self, CloneInstance.self,
             Logs.self, Mem.self, Bench.self, Paths.self, Debug.self,
         ])
 

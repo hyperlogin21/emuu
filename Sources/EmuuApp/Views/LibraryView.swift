@@ -6,6 +6,7 @@ import EmuuEngine
 struct LibraryView: View {
     @Environment(AppModel.self) private var model
     @State private var pendingDelete: InstanceRow?
+    @State private var pendingClone: InstanceRow?
 
     var body: some View {
         @Bindable var model = model
@@ -28,7 +29,8 @@ struct LibraryView: View {
                                         busy: model.busy.contains(row.id),
                                         open: { open(row.id) },
                                         finish: { choice in Task { await model.finish(row.id, choice) } },
-                                        delete: { pendingDelete = row })
+                                        delete: { pendingDelete = row },
+                                        clone: { pendingClone = row })
                     }
                 }
                 .listStyle(.inset)
@@ -51,6 +53,9 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $model.showCreateSheet) {
             CreateInstanceSheet { id in open(id) }
+        }
+        .sheet(item: $pendingClone) { row in
+            CloneInstanceSheet(source: row)
         }
         .alert("Delete \(pendingDelete?.config.displayName ?? "")?", isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })) {
@@ -97,6 +102,7 @@ struct InstanceRowView: View {
     let open: () -> Void
     let finish: (ShutdownChoice) -> Void
     let delete: () -> Void
+    var clone: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 12) {
@@ -124,6 +130,8 @@ struct InstanceRowView: View {
                 Button("Shut Down") { finish(.shutDown) }
                     .disabled(!row.state.isRunningEngine)
                 Divider()
+                Button("Clone…", action: clone)
+                    .disabled(busy)
                 Button("Delete…", role: .destructive, action: delete)
                     .disabled(busy)
             } label: {

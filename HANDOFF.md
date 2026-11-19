@@ -2,6 +2,27 @@
 
 Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub; the orchestrator commits).
 
+## Status update (2026-11-19, clone an instance with its Google sign-in)
+
+- **Asked:** "If my Google Play is logged in on `phone`, allow me to clone `phone` so that the new simulator brings
+  my session across." Built on branch `clone-instance` (worktree `/Users/leslie/dev/emuu-clone`), tested only under
+  a scratch `EMUU_HOME`; the real `~/.emuu` was not touched.
+- **New:** `emuu clone-instance <source> <name> [--stop-source] [--cold-boot] [--port N] [--display-name] [--json]`
+  and "Clone…" in each library row's "…" menu (name sheet, consent for a running source, progress). Logic in
+  `Sources/EmuuFarm/InstanceClone.swift` on top of the farm's `InstanceStore.clone` (APFS clonefile + snapshot fix-ups).
+  Docs: README "Cloning an instance", ARCHITECTURE "Instance-to-instance clone".
+- **Verified for real** (scratch instance on the Play Store image, no Google account): installed APK, appops change,
+  4 settings (global/secure/system), a file in /sdcard/Download and `android_id` all identical on the clone; the
+  source unchanged afterwards and never saw the clone's writes; the clone's engine opened only its own files.
+  Running source via CLI `--stop-source` (supervisor): paused 5.5 s, whole command 5.8 s; via the app (self-test
+  hook, the screen was locked so the UI itself was not seen): hibernate + copy 1.25 s, source streaming again after
+  3.5 s with the same guest boot id. Copy itself < 0.01 s; 1.8 MiB private disk after the copy (APFS private-size
+  accounting; `du` shows the full 3.5 GB for both). Clone with snapshot adb-ready in 2.35 s, cold-boot clone 10.7 s.
+  Non-APFS (HFS+ disk image): full copy with a clear note.
+- **Not verified:** a real Google account (sign-in carried over, and whether Google tolerates several copies running
+  at once: all copies are the same device and account to Google); the app's sheet on screen (rendered offscreen only;
+  AppKit controls do not render there); re-freezing a frozen source.
+
 ## Status update (2026-11-19, display flicker in HD video / TikTok)
 
 - **Reported:** flicker in HD video (TikTok) in the native display. Investigated on an isolated instance with a
