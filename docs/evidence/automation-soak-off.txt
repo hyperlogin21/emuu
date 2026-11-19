@@ -1,0 +1,20 @@
+# Run B — emuu-e2e: lite profile, --idle-freeze 2 (headless = hidden), automation mode OFF; identical script with a 200 s idle gap
+emuu-e2e: running on emulator-5554, engine pid 72034, supervisor pid 72033, governor frugal level normal, tier T0 none, 0 actions
+  guest 1.11 GiB/1.92 GiB used (avail 42%), zram 729 MiB · engine 3.36 GiB · host high
+  adb: adb -s emulator-5554 shell
+01:10:10 busy 120s
+01:12:13 idle 200s (no adb commands)
+01:15:34 busy 30s
+  01:16:04 FAIL: adb install -r /private/tmp/claude-501/-Users-leslie-dev-emuu/c4db58ba-5e83-40c0-a7f6-74dbd9155ac5/scratchpad/apk/editor.apk (engine: frozen)
+  engine is frozen — stopping this busy phase
+01:16:04 done in 354s: iterations=31 ok=300 failed=1 engine-not-running-observations=14 engine-states-seen: running frozen
+soak exit=1
+emuu-e2e: frozen on emulator-5554, engine pid 72034, supervisor pid 72033, governor frugal level normal, tier T4 freeze, 1 actions
+  guest - · engine 4.36 GiB (peak 4.51 GiB) · host normal
+  adb: adb -s emulator-5554 shell
+# supervisor events during the run:
+[01:14:28] engine frozen
+[01:14:28] plan    freeze (hidden 4m44s, idle 2m06s)
+[01:14:28] action  freeze → applied: engine frozen
+[01:15:00] state   frozen
+[01:15:00] tier    T0 none → T4 freeze (engine frozen)

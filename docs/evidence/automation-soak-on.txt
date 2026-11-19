@@ -1,0 +1,14 @@
+# Run A — same supervisor (lite profile, --idle-freeze 2, headless = hidden), automation mode ON (emuu automation on); identical script with a 200 s idle gap
+emuu-e2e: running on emulator-5554, engine pid 72034, supervisor pid 72033, governor frugal level normal, tier T0 none, 1 actions, automation mode
+  guest 1.12 GiB/1.92 GiB used (avail 42%), zram 784 MiB · engine 4.36 GiB (peak 4.51 GiB) · cpu 1% · host normal
+  adb: adb -s emulator-5554 shell
+01:16:25 busy 120s
+01:18:25 idle 200s (no adb commands)
+01:21:46 busy 30s
+01:22:19 done in 354s: iterations=37 ok=371 failed=0 engine-not-running-observations=0 engine-states-seen: running
+soak exit=0
+emuu-e2e: running on emulator-5554, engine pid 72034, supervisor pid 72033, governor frugal level normal, tier T0 none, 1 actions, automation mode
+  guest 1.25 GiB/1.92 GiB used (avail 35%), zram 729 MiB · engine 4.52 GiB (peak 4.58 GiB) · cpu 48% · host normal
+  adb: adb -s emulator-5554 shell
+emuu-e2e: automation mode on · supervisor reports on · adb activity from other tools 14s ago
+# supervisor events during the run:

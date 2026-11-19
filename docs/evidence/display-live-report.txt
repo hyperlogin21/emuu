@@ -1,0 +1,21 @@
+serial: emulator-5554
+adb: /Users/leslie/Library/Android/sdk/platform-tools/adb
+date: 2026-11-18 14:22:15 +0000
+server: /Users/leslie/.emuu/cache/scrcpy/scrcpy-server-v5.0.1 (733930 bytes, sha256 764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536)
+start → streaming: 0.144975333 seconds
+device name: sdk_gphone64_arm64, video size: ?
+decoded frames: 20 (waited 5.8542e-05 seconds), decode errors: 0, hardware decoder: true
+snapshot: /Users/leslie/dev/emuu/docs/evidence/display-live-frame.png 720x1600, mean brightness 207.3, distinct colours 38
+video size: 720x1600
+focus before swipe: mCurrentFocus=null
+  mCurrentFocus=Window{dba1ed3 u0 com.google.android.apps.messaging/com.google.android.apps.messaging.gaia.expresssignin.BugleExpressSignInActivity}
+focus after injected swipe: mCurrentFocus=null
+  mCurrentFocus=Window{521f5f4 u0 NotificationShade}
+InputDispatcher RecentQueue: MotionEvent, age=1625ms; MotionEvent, age=1602ms; MotionEvent, age=1579ms; MotionEvent, age=1556ms; MotionEvent, age=1537ms; MotionEvent, age=1515ms; MotionEvent, age=1491ms; MotionEvent, age=1491ms
+stats: fps 18.5, bitrate 2039 kbit/s, frames 85, key 1, bytes 1431114, dropped 0, sessions 1
+device scrcpy process while streaming: 6738   3628 sh -c CLASSPATH=/data/local/tmp/emuu-scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 5.0.1 scid=0ae35dd5 log_level=info audio=false video_codec=h264 tunnel_forward=true control=true video_bit_rate=4000000 max_fps=30 stay_awake=true power_on=true clipboard_autosync=true video_codec_options=repeat-previous-frame-after:long=500000
+ 6740 166436 app_process / com.genymobile.scrcpy.Server 5.0.1 scid=0ae35dd5 log_level=info audio=false video_codec=h264 tunnel_forward=true control=true video_bit_rate=4000000 max_fps=30 stay_awake=true power_on=true clipboard_autosync=true video_codec_options=repeat-previous-frame-after:long=500000
+ 6752 156892 app_process / com.genymobile.scrcpy.CleanUp 0 1 false false -1 -1
+after pause: state paused, device scrcpy processes: (none), forwards for serial: 0
+resume → frames: 21 new frames in 0.991299417 seconds
+final state: stopped

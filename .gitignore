@@ -1,0 +1,17 @@
+.DS_Store
+/.build
+/.build-*
+.build*/
+/Packages
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+.swiftpm/xcode/
+.swiftpm/configuration/registries.json
+.netrc
+*.log
+scripts/secure-test-apk/build/
+/dist/
+/*.raw
