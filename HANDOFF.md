@@ -2,6 +2,22 @@
 
 Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub; the orchestrator commits).
 
+## Status update (2026-11-19, window closes on shutdown / hibernate)
+
+- An instance's window now **closes by itself** when the device shuts down or hibernates: Android power-off,
+  `emuu stop`, `adb emu kill`, library Shut Down / Hibernate, the window's Hibernate, the governor's or a CLI
+  supervisor's hibernation (also minimised). The library shows Stopped/Hibernated; opening it starts/resumes it.
+  It stays open for guest reboots, engine restarts (`emuu reboot --hard|--cold`, heal, self-heal, Restart Engine —
+  it reconnects), freeze/thaw, crashes (error + Retry/Cold Boot) and failed starts.
+- Logic: `Sources/EmuuApp/Model/WindowAutoClose.swift` (pure, `WindowAutoClosePolicyTests`), wired in
+  `InstanceSession.engineStateChanged` / `AppModel.engineEnded`. Exits seen from outside are confirmed after 4 s
+  (a restart brings a new engine within ~1 s). Engine 36.4.9 reports a guest power-off as a SIGKILL "crash" after a
+  20 s hang; the app recognises it from the engine log line "… to shutdown gracefully before kill".
+- Self-test: `EMUU_APP_SELFTEST_HIBERNATE=1` (hibernate from the app closes the window, recording finalised,
+  reopen resumes), `EMUU_APP_SELFTEST_ONLY=none`, `EMUU_APP_SELFTEST_LEAVE_OPEN=1|minimized`.
+- Verified on a scratch instance through the app's log; CGWindowList could not confirm closes (screen locked: closed
+  windows — also ones closed the old way — stayed listed as on screen).
+
 ## Status update (2026-11-19, display flicker in HD video / TikTok)
 
 - **Reported:** flicker in HD video (TikTok) in the native display. Investigated on an isolated instance with a

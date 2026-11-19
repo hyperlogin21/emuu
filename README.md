@@ -143,6 +143,16 @@ showing it again reopens it and the current frame is back in about 0.15 s. A sta
 while visible: the engine only sends frames when something changes. While a recording runs the stream stays up
 whatever the window does, and the instance counts as in use (no freeze, no hibernate).
 
+**The window closes when the phone shuts down or hibernates.** Powering off from inside Android, `emuu stop`,
+`adb emu kill`, Shut Down / Hibernate in the library, the window's Hibernate, and a hibernation by the memory
+governor or a CLI supervisor (also while the window is minimised or on another Space) all close the instance's
+window; a recording in progress is saved first. The library then shows the instance as Stopped or Hibernated, and
+opening it starts or resumes it (about 2 s from hibernation). The window stays open for a guest reboot
+(`emuu reboot`, a soft reboot), an engine restart (`emuu reboot --hard|--cold`, `emuu heal`, self-healing,
+Restart Engine — the window reconnects to the new engine), freeze/thaw, a crash (the window shows the error with
+Retry and Cold Boot) and a start that fails. When the engine is stopped by another process the window waits about
+4 s to see whether a new engine comes up before it closes.
+
 **Rotate** (button, ⌘R, `emuu rotate`) turns the virtual device itself, like turning a phone: Android's
 auto-rotate is switched on, apps that support landscape (Settings, Chrome, the Play Store, games) re-lay out, and
 the window re-shapes. Apps locked to portrait — the phone home screen among them — stay portrait and appear
