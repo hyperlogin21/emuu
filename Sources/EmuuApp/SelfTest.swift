@@ -19,6 +19,12 @@ import EmuuDisplay
 ///
 /// * `EMUU_APP_SELFTEST_EVIDENCE=<dir>`: where PNG/MP4 evidence goes (default `~/.emuu/logs`).
 /// * `EMUU_APP_SELFTEST_QUIT=1`: quit when done (instance windows closed, engine left running).
+/// * `EMUU_APP_SELFTEST_ONLY=none`: open/close cycles without the device exercises.
+/// * `EMUU_APP_SELFTEST_LEAVE_OPEN=1|minimized`: leave the last window open (or minimised) and the app running for
+///   manual checks.
+/// * `EMUU_APP_SELFTEST_HIBERNATE=1`: after the cycles, start a recording, hibernate from the app and check that
+///   the window closes by itself (recording finalised, session detached, library row hibernated), then reopen
+///   it from the library path and time the resume. The engine is left running.
 /// Results go to stdout and `~/.emuu/logs/app-selftest.txt`.
 @MainActor
 final class SelfTestRunner {
@@ -76,7 +82,9 @@ final class SelfTestRunner {
             }
             report("SELFTEST cycle \(cycle) streaming after \(fmt(toFrames)); frames=\(stats.totalFrames) dropped=\(stats.droppedFrames) streams=\(stats.streamsOpened) transportLatency=\(stats.lastTransportLatencyMs.map { String(format: "%.1fms", $0) } ?? "?") video=\(stats.videoSize.map { "\($0.width)x\($0.height)" } ?? "?") governs=\(session.governsMemory) automation=\(session.automationMode)")
 
-            if cycle == 1, env["EMUU_APP_SELFTEST_ONLY"] == "native" {
+            if env["EMUU_APP_SELFTEST_ONLY"] == "none" {
+                // open/close cycles only
+            } else if cycle == 1, env["EMUU_APP_SELFTEST_ONLY"] == "native" {
                 await exerciseNativeDisplay(session)
             } else if cycle == 1 {
                 await renderWindow(session)
@@ -93,6 +101,12 @@ final class SelfTestRunner {
             let detached = await waitFor(seconds: 30) { self.model.session(for: id) == nil }
             try? await Task.sleep(for: .seconds(2))
             report("SELFTEST cycle \(cycle) closed detached=\(detached) footprint=\(footprintMB()) \(liveCounts())")
+        }
+        if env["EMUU_APP_SELFTEST_HIBERNATE"] == "1" { await exerciseHibernateCloses(id) }
+        if let leave = env["EMUU_APP_SELFTEST_LEAVE_OPEN"], leave == "1" || leave == "minimized" {
+            // Manual checks follow (e.g. stopping the engine from the CLI): keep the reopened window and engine.
+            if leave == "minimized" { model.windowControllers[id]?.window?.miniaturize(nil) }
+            return report("SELFTEST DONE (window left open) footprint=\(footprintMB()) \(liveCounts())")
         }
         // Nothing may be left behind: no instance window, no session.
         for (wid, _) in model.windowControllers { closeWindow(wid) }
@@ -322,6 +336,45 @@ final class SelfTestRunner {
                 _ = await waitFor(seconds: 15) { session.display?.state == .paused }
             }
         }
+    }
+
+    /// Hibernate from the app closes the window (a recording in progress is finalised); opening it again resumes.
+    private func exerciseHibernateCloses(_ id: InstanceID) async {
+        model.openWindow(id)
+        let streaming = await waitFor(seconds: 120) {
+            guard let d = self.model.session(for: id)?.display else { return false }
+            return d.state == .streaming && d.session.stats().totalFrames > 0
+        }
+        guard streaming, let session = model.session(for: id) else {
+            return report("SELFTEST hibernate-close FAILED: no frames before hibernating")
+        }
+        await session.startRecording()
+        let recording = session.isRecording
+        try? await Task.sleep(for: .seconds(3))
+        let t0 = ContinuousClock.now
+        await session.hibernateNow()
+        let closed = await waitFor(seconds: 60) { self.model.windowControllers[id] == nil && self.model.session(for: id) == nil }
+        let closeTime = ContinuousClock.now - t0
+        _ = await waitFor(seconds: 30) { !self.model.busy.contains(id) }
+        await model.reload()
+        let row = model.rows.first { $0.id == id }
+        var recNote = "no recording"
+        if recording, let result = session.lastRecording, let url = result.files.first {
+            let asset = AVURLAsset(url: url)
+            let duration = (try? await asset.load(.duration))?.seconds ?? 0
+            recNote = String(format: "recording finalised %@ frames=%d duration=%.2fs", url.lastPathComponent, result.frameCount, duration)
+            for f in result.files { try? FileManager.default.removeItem(at: f) }
+        } else if recording {
+            recNote = "recording LOST"
+        }
+        report("SELFTEST hibernate-close windowClosed=\(closed) after \(fmt(closeTime)) engineState=\(session.engineState) libraryRow=\(row.map { "\($0.state)" } ?? "?") \(recNote) \(liveCounts())")
+        let t1 = ContinuousClock.now
+        model.openWindow(id)
+        let resumed = await waitFor(seconds: 120) {
+            guard let d = self.model.session(for: id)?.display else { return false }
+            return d.state == .streaming && d.session.stats().totalFrames > 0
+        }
+        report("SELFTEST hibernate-close reopen → streaming=\(resumed) after \(fmt(ContinuousClock.now - t1)) state=\(model.session(for: id)?.engineState.description ?? "-") windowsOpen=\(model.windowControllers.count)")
     }
 
     // MARK: Native display (engine framebuffer over gRPC)

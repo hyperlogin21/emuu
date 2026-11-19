@@ -318,6 +318,22 @@ AVD tuning (EmuuEngine config generation):
   `NSHostingView` with the screen and the control strip). SwiftUI's `WindowGroup` kept closed windows and their
   `InstanceSession` alive; the controller releases everything on close. Only the library and Settings are
   SwiftUI scenes. Menu commands act on `AppModel.activeSession` (the key emulator window).
+* **Window closes with the engine.** A shutdown or hibernation closes the instance's window
+  (`WindowAutoClosePolicy`, pure and unit-tested; there is no lasting "Stopped"/"Hibernated" placeholder, the
+  library resumes the instance). `InstanceSession` decides on each engine state change: a stop/hibernate run in
+  this process (window, library, governor) passes through `.stopping`/`.hibernating` and closes at once; an engine
+  that vanishes from outside (CLI, supervisor, `adb emu kill`, guest power-off) is confirmed after 4 s with
+  `EngineInstance.refresh()` — a new engine (hard/cold restart, heal, self-heal) keeps the window and reconnects
+  it, a live CLI supervisor reporting `booting`/`stopping`/`hibernating` is asked again — and only then closes.
+  Never closed for: crashes (the window shows the error), failed starts (session never reached `.ready`), the
+  app's own Restart Engine / Retry / resume, guest reboots and freeze/thaw (the engine never stops).
+  `AppModel.engineEnded` removes the session from `sessions` *before* `NSWindow.close()` (works minimised or on
+  another Space), so `windowClosed` does not apply the window-close choice again, then `detach()` tears down the
+  display, gRPC streams and governor and finalises a recording. A CLI supervisor is told `visibility: false` (before
+  a window-initiated hibernate and on the close), otherwise its governor would resume the instance at once because
+  a display is "visible". Engine 36.4.9 reports Android powering off as a SIGKILL "crash" (it saves, hangs 20 s and
+  kills itself); the session recognises it from the engine log ("… to shutdown gracefully before kill" since the
+  last `emuu launch` header) and closes as for a stop. Library Shut Down / Hibernate close the window the same way.
 * **Single instance.** `EmuuLauncher` (the `@main`) takes `~/.emuu/run/app.lock` (`flock`) before AppKit starts;
   a second process posts a distributed notification to the holder (activate + forwarded files) and exits 0.
 * **Icons.** `Sources/EmuuApp/Resources/Icons/*.svg`, SwiftPM resource bundle `Emuu_EmuuApp.bundle`, loaded by

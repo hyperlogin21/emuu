@@ -44,7 +44,9 @@ final class InstanceSession: Identifiable {
         case working(String)
         /// Engine running, display pipeline built.
         case ready
-        /// Engine hibernated or stopped while the session stays attached (window shows a resume button).
+        /// Engine hibernated or stopped while the session stays attached. Shown only briefly: a shutdown or
+        /// hibernation closes the window (see `WindowAutoClosePolicy`); an exit seen from outside is shown here
+        /// while it is confirmed not to be a restart.
         case parked(InstanceState)
         case failed(String)
     }
@@ -117,6 +119,20 @@ final class InstanceSession: Identifiable {
     @ObservationIgnored private(set) var lastTap: (x: Int, y: Int)?
     @ObservationIgnored private var prefsTask: Task<Void, Never>?
     @ObservationIgnored private var recordingKeepAliveTask: Task<Void, Never>?
+    /// Called once when the engine was shut down or hibernated on purpose: the app closes this session's window
+    /// and detaches it (without applying the window-close choice). Set by `AppModel`.
+    @ObservationIgnored var onEngineEnded: (@MainActor (InstanceSession, String) -> Void)?
+    /// The pipeline was built at least once (a later stop is a shutdown, not a failed start).
+    @ObservationIgnored private var wasUp = false
+    /// "Restart Engine" is hibernating and resuming the engine: its exit must not close the window.
+    @ObservationIgnored private var restartingEngine = false
+    /// This window asked a CLI supervisor to hibernate (that exit looks external but is intentional).
+    @ObservationIgnored private var exitRequestedHere = false
+    /// Confirms an exit seen from outside (see `WindowAutoClosePolicy.confirm`).
+    @ObservationIgnored private var exitCheckTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var endReported = false
+    /// The engine's last exit, reported as a crash, was Android powering off (see `WindowAutoClosePolicy`).
+    @ObservationIgnored private var crashWasShutdown = false
     /// Live-object counters for the self-test's retention check.
     nonisolated(unsafe) static var liveCount = 0
     @ObservationIgnored private let log: EmuuLogger
@@ -156,6 +172,16 @@ final class InstanceSession: Identifiable {
             watchEngine(engine)
             var state = await engine.refresh()
             engineState = state
+            let link = CLISupervisorLink(id: id, paths: env.paths)
+            if state == .hibernated, link.isLive() {
+                // Hibernated under a CLI supervisor (its window closed then): let the supervisor resume it, so it
+                // keeps governing the engine; starting it from here would leave the supervisor thinking it is
+                // still hibernated. Falls back to starting it here below.
+                phase = .working("Resuming from hibernation…")
+                let r = await link.sendAsync(["command": "wake"], timeout: 180)
+                if !r.ok { log.warning("wake via supervisor failed: \(r.message ?? "?"); starting the engine here") }
+                state = await engine.refresh()
+            }
             switch state {
             case .running:
                 break
@@ -240,6 +266,8 @@ final class InstanceSession: Identifiable {
         }
         cachedEnginePID = await engine.enginePID()
         phase = .ready
+        wasUp = true
+        exitRequestedHere = false
         writeRunState()
         watchPreferences()
         // Keep Android's "use on-screen keyboard" setting in line with the instance preference.
@@ -483,6 +511,26 @@ final class InstanceSession: Identifiable {
         let previous = engineState
         engineState = state
         guard previous != state else { return }
+        if case .crashed(let reason) = state, wasUp, !isClosing, resumeTask == nil, !restartingEngine,
+           WindowAutoClosePolicy.engineLogShowsShutdown(Self.logTail(env.paths.engineLogFile(for: id))) {
+            // Not a crash: Android powered off; the engine saved, hung and killed itself (its snapshot was
+            // discarded, so the next start cold-boots). Close like any external stop, after confirming that no
+            // supervisor restarts it.
+            crashWasShutdown = true
+            note(.info, "Android powered off (engine exit: \(reason))")
+            log.info("\(id): Android powered off; engine exit reported as \(reason)")
+            CrashMarker.clear(for: id, paths: env.paths)
+            if phase == .ready { phase = .parked(.stopped) }
+            confirmExternalExit()
+            writeRunState()
+            return
+        }
+        switch WindowAutoClosePolicy.decide(previous: previous, new: state, context: autoCloseContext) {
+        case .keepOpen: break
+        case .close(let reason): engineEnded(reason)
+        case .confirm: confirmExternalExit()
+        }
+        if state.isRunningEngine { crashWasShutdown = false }
         switch state {
         case .hibernated, .stopped:
             if phase == .ready { phase = .parked(state) }
@@ -495,6 +543,77 @@ final class InstanceSession: Identifiable {
             break
         }
         writeRunState()
+    }
+
+    private var autoCloseContext: WindowAutoClosePolicy.Context {
+        var failed = false
+        if case .failed = phase { failed = true }
+        return WindowAutoClosePolicy.Context(wasUp: wasUp, showsFailure: failed,
+                                             restartInProgress: restartingEngine || resumeTask != nil,
+                                             exitRequestedHere: exitRequestedHere, crashWasShutdown: crashWasShutdown)
+    }
+
+    /// The last 64 KiB of a log file.
+    private static func logTail(_ url: URL) -> String {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return "" }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        try? handle.seek(toOffset: size > 65_536 ? size - 65_536 : 0)
+        return String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
+    }
+
+    /// The engine vanished without this process stopping it: wait `confirmDelay`, look for an engine again
+    /// and close only if none came back (a restart by the CLI, a supervisor or self-healing starts a new
+    /// engine within about a second).
+    private func confirmExternalExit() {
+        guard exitCheckTask == nil, !isClosing, !endReported, let engine else { return }
+        exitCheckTask = Task { [weak self] in
+            try? await Task.sleep(for: WindowAutoClosePolicy.confirmDelay)
+            var checks = 0
+            while !Task.isCancelled {
+                guard let self, !self.isClosing, !self.endReported else { return }
+                let state = await engine.refresh()
+                let supervisor = self.cliLink.flatMap { $0.isLive() ? $0.status()?["engineState"] as? String : nil }
+                var verdict = WindowAutoClosePolicy.confirm(state: state, supervisorEngineState: supervisor, context: self.autoCloseContext)
+                if verdict == .checkAgain, checks >= WindowAutoClosePolicy.maxRechecks {
+                    verdict = .close(reason: WindowAutoClosePolicy.reason(state))
+                }
+                switch verdict {
+                case .close(let reason):
+                    self.exitCheckTask = nil
+                    if WindowAutoClosePolicy.isCrash(state) {
+                        // Power-off: clear the controller's crash state (no engine is running, just checked) so
+                        // the library shows the instance as stopped.
+                        try? await engine.stop(.force)
+                    }
+                    self.engineEnded(reason)
+                    return
+                case .engineBack:
+                    self.exitCheckTask = nil
+                    self.note(.info, "Engine is back (\(state)) after a restart elsewhere; reconnecting")
+                    self.log.info("\(self.id): engine restarted elsewhere (\(state)); window stays open")
+                    self.resumeEngine()
+                    return
+                case .keepOpen:
+                    self.exitCheckTask = nil
+                    return
+                case .checkAgain:
+                    checks += 1
+                    try? await Task.sleep(for: WindowAutoClosePolicy.recheckInterval)
+                }
+            }
+        }
+    }
+
+    /// Shut down or hibernated on purpose: hand the window to the app to close (once).
+    private func engineEnded(_ reason: String) {
+        guard !endReported, !isClosing else { return }
+        endReported = true
+        exitCheckTask?.cancel()
+        exitCheckTask = nil
+        note(.info, "Instance \(reason); closing the window")
+        log.info("\(id) \(reason); closing its window")
+        onEngineEnded?(self, reason)
     }
 
     // MARK: Governor events / HUD
@@ -992,6 +1111,8 @@ final class InstanceSession: Identifiable {
         await teardownPipeline()
         engineWatch?.cancel()
         engineWatch = nil
+        exitCheckTask?.cancel()
+        exitCheckTask = nil
         prefsTask?.cancel()
         prefsTask = nil
         keyboardEnforceTask?.cancel()
@@ -1000,6 +1121,17 @@ final class InstanceSession: Identifiable {
         RunStateStore.remove(id, paths: env.paths)
         services.activity.remove(id)
         engine = nil
+    }
+
+    /// Detaches after the engine was shut down or hibernated elsewhere (the window closed by itself). Same
+    /// teardown as a user close; a CLI supervisor is told the display is gone so it does not resume the engine.
+    func detachAfterEngineEnded() async {
+        isClosing = true
+        if let link = cliLink {
+            await teardownPipeline()
+            _ = await link.sendAsync(["command": "visibility", "visible": false])
+        }
+        await detach()
     }
 
     /// Applies a quit/close choice, then detaches.
@@ -1048,26 +1180,46 @@ final class InstanceSession: Identifiable {
     /// and launch it again with the current command line. Nothing is lost; takes a few seconds.
     func restartEngineForDisplay() {
         Task { [weak self] in
-            guard let self else { return }
+            guard let self, !self.restartingEngine else { return }
+            // A restart, not a hibernation: the window stays open (see `WindowAutoClosePolicy`).
+            self.restartingEngine = true
+            defer { self.restartingEngine = false }
             if let link = self.cliLink {
                 self.note(.action, "Restarting the engine through the CLI supervisor (display service)")
                 _ = await link.sendAsync(["command": "hibernate"], timeout: 180)
                 _ = await link.sendAsync(["command": "wake"], timeout: 180)
-                if let engine = self.engine { try? await self.buildPipeline(engine: engine) }
+                if let engine = self.engine {
+                    _ = await engine.refresh()
+                    try? await self.buildPipeline(engine: engine)
+                }
                 return
             }
             await self.hibernateNow()
             self.resumeEngine()
+            await self.resumeTask?.value
         }
     }
 
-    /// Hibernate from the window/HUD while keeping the session attached (resume when shown again).
+    /// Hibernate from the window/HUD/menu. The window then closes (the library resumes the instance); during
+    /// "Restart Engine" it stays open and the engine is resumed.
     func hibernateNow() async {
         guard let engine else { return }
         if let link = cliLink {
             note(.action, "Hibernate via CLI supervisor")
+            if !restartingEngine {
+                // The window is about to close: finalise a recording and tell the supervisor nobody is looking,
+                // or its governor resumes the instance at once (a visible display is a resume trigger).
+                exitRequestedHere = true
+                displayWanted = display != nil
+                await teardownPipeline()
+                phase = .working("Hibernating…")
+                _ = await link.sendAsync(["command": "visibility", "visible": false])
+            }
             let r = await link.sendAsync(["command": "hibernate"], timeout: 180)
-            if !r.ok { showToast("Hibernate failed: \(r.message ?? "?")") }
+            if !r.ok {
+                exitRequestedHere = false
+                if restartingEngine { showToast("Hibernate failed: \(r.message ?? "?")") } else { fail(EmuuError.engine("Hibernate failed: \(r.message ?? "?")")) }
+            }
             return
         }
         displayWanted = display != nil
@@ -1116,7 +1268,7 @@ final class InstanceSession: Identifiable {
     }
 
     private func writeRunState() {
-        guard engine != nil, !isClosing else { return }
+        guard engine != nil, !isClosing, !endReported else { return }
         let state = InstanceRunState(
             instanceID: id, ownerKind: .app, enginePID: nil, serial: client?.serial,
             governorActive: governsMemory, displayActive: display?.state.isActive ?? false,

@@ -179,6 +179,7 @@ final class AppModel {
             return nil
         }
         let session = InstanceSession(config: config, env: env, services: services, settings: settings)
+        session.onEngineEnded = { [weak self] session, reason in self?.engineEnded(session, reason: reason) }
         sessions[id] = session
         session.begin(coldBoot: coldBoot)
         return session
@@ -204,8 +205,35 @@ final class AppModel {
             return
         }
         sessions[id] = nil
+        // Shut down / hibernated from the library (or at quit): the window goes too. The session is already
+        // out of `sessions`, so the close does not apply the window-close choice a second time.
+        closeWindow(id)
         await withBusy(id) { await session.finish(choice) }
         await reload()
+    }
+
+    /// The session's engine was shut down or hibernated on purpose (see `WindowAutoClosePolicy`): close the
+    /// window and detach. Same teardown as the user closing the window (display, gRPC streams, governor; a
+    /// recording is finalised), but no stop/hibernate is applied — the engine is already down.
+    func engineEnded(_ session: InstanceSession, reason: String) {
+        let id = session.id
+        guard sessions[id] === session else { return }
+        log.info("\(id) \(reason): closing its window")
+        sessions[id] = nil
+        closeWindow(id)
+        Task {
+            await withBusy(id) { await session.detachAfterEngineEnded() }
+            await reload()
+        }
+    }
+
+    /// Closes an instance window without asking (also when minimised or on another Space). Callers remove the
+    /// session from `sessions` first, so `windowClosed` finds nothing to finish.
+    private func closeWindow(_ id: InstanceID) {
+        guard let controller = windowControllers[id], let window = controller.window else { return }
+        let wasMinimised = window.isMiniaturized
+        window.close()
+        log.info("closed the window of \(id) (was minimised: \(wasMinimised); still visible: \(window.isVisible); instance windows open: \(windowControllers.count))")
     }
 
     /// Called when an emulator window closes.
