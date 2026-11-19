@@ -77,6 +77,8 @@ final class InstanceSession: Identifiable {
     private(set) var automationMode: Bool
     /// Show Android's soft keyboard for text fields (instance setting).
     private(set) var softKeyboardEnabled: Bool
+    /// Where guest video is decoded (instance setting; applies at the next engine start).
+    private(set) var videoDecoder: VideoDecoderMode
     /// A keyboard show/hide is running on the device.
     private(set) var keyboardBusy = false
     /// Recording state mirrored from the display controller (for the strip).
@@ -130,6 +132,7 @@ final class InstanceSession: Identifiable {
         self.profile = settings.profile(for: config.id, default: config.memoryProfile)
         self.automationMode = config.isAutomationMode
         self.softKeyboardEnabled = config.softKeyboardEnabled
+        self.videoDecoder = config.videoDecoder ?? .auto
         self.log = EmuuLogger(category: "app.session.\(config.id.rawValue)")
         Self.liveCount += 1
     }
@@ -801,6 +804,17 @@ final class InstanceSession: Identifiable {
         }
     }
 
+    // MARK: Video decoder
+
+    /// Saves the decoder choice. The guest picks its codecs at boot, so it applies at the next start (which cold-boots
+    /// once when it switches between host and guest decoders); `EngineInstance` reads the stored value at launch.
+    func setVideoDecoder(_ mode: VideoDecoderMode) {
+        guard mode != videoDecoder else { return }
+        videoDecoder = mode
+        _ = try? env.store.updatePreferences(id) { $0.videoDecoder = mode }
+        note(.info, "Video decoder \(mode == .auto ? "auto (\(mode.resolved.rawValue))" : mode.rawValue): applies at the next start")
+    }
+
     // MARK: Automation mode
 
     func setAutomationMode(_ on: Bool) async {
@@ -835,6 +849,7 @@ final class InstanceSession: Identifiable {
                 } else if fresh.isAutomationMode != self.automationMode {
                     self.automationMode = fresh.isAutomationMode
                 }
+                if (fresh.videoDecoder ?? .auto) != self.videoDecoder { self.videoDecoder = fresh.videoDecoder ?? .auto }
                 if fresh.softKeyboardEnabled != self.softKeyboardEnabled, !self.keyboardBusy {
                     self.softKeyboardEnabled = fresh.softKeyboardEnabled
                 }

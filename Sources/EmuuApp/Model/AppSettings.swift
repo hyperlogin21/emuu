@@ -103,3 +103,14 @@ extension MemoryProfile {
         }
     }
 }
+
+extension VideoDecoderMode {
+    var title: String {
+        switch self {
+        case .auto: return "Auto (\(VideoDecoderMode.resolvedDefault.title))"
+        case .hardware: return "Hardware (Mac)"
+        case .hostSoftware: return "Mac software (ffmpeg)"
+        case .software: return "Software (Android)"
+        }
+    }
+}

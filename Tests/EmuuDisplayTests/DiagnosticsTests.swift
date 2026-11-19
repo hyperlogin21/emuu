@@ -121,6 +121,22 @@ struct PatternCanvas {
         #expect(s.duplicates == 1 && s.skippedCounters == 1 && s.artefacts == 0)
     }
 
+    /// The user's report: the video area is solid (0, 135, 0) — YUV 0,0,0 in BT.601 — under the app's UI. The old
+    /// test (G > 150 over half the screen) could not see that colour.
+    @Test func zeroYUVGreenUnderUIIsCounted() {
+        let a = FrameAnalyzer()
+        var f = PatternCanvas(screenW: Self.W, screenH: Self.H)
+        f.fill(0, 0, Self.W, Self.H, (250, 250, 250))
+        f.fill(0, 60, Self.W, 560, (0, 135, 0))             // video area, BT.601
+        f.fill(300, 300, 50, 200, (255, 255, 255))         // icons on top
+        #expect(f.withPixels { a.analyze($0, seq: 1, arrival: .now) }.0.kinds.contains(.green))
+        var bt709 = PatternCanvas(screenW: Self.W, screenH: Self.H)
+        bt709.fill(0, 100, Self.W, 500, (0, 77, 0))
+        #expect(bt709.withPixels { a.analyze($0, seq: 2, arrival: .now) }.0.kinds.contains(.green))
+        #expect(!frame(7).withPixels { a.analyze($0, seq: 3, arrival: .now) }.0.kinds.contains(.green))
+        #expect(FrameAnalyzer.isDecoderGreen((0, 135, 0)) && !FrameAnalyzer.isDecoderGreen((60, 135, 60)))
+    }
+
     @Test func wrapsAroundThePeriod() {
         let a = FrameAnalyzer()
         let t0 = ContinuousClock.now

@@ -51,4 +51,22 @@ import EmuuMemory
         let g = try JSONDecoder().decode(SupervisorStatus.Governor.self, from: Data(old.utf8))
         #expect(g.automationMode == nil)
     }
+
+    @Test func videoDecoderCommandAndOptions() throws {
+        let set = try #require(try EmuuCLI.parseAsRoot(["video-decoder", "software", "phone"]) as? VideoDecoder)
+        #expect(VideoDecoder.parse(set.args)! == ("phone", .software))
+        let swapped = try #require(try EmuuCLI.parseAsRoot(["video-decoder", "phone", "host-software"]) as? VideoDecoder)
+        #expect(VideoDecoder.parse(swapped.args)! == ("phone", .hostSoftware))
+        let status = try #require(try EmuuCLI.parseAsRoot(["video-decoder", "status"]) as? VideoDecoder)
+        #expect(VideoDecoder.parse(status.args)! == (nil, nil))
+        #expect(throws: (any Error).self) { try EmuuCLI.parseAsRoot(["video-decoder", "fast"]) }
+
+        let create = try #require(try EmuuCLI.parseAsRoot(["create", "phone", "--video-decoder", "hardware"]) as? Create)
+        let config = try create.makeConfig(id: InstanceID(rawValue: "phone")!, image: .playStoreDefault)
+        #expect(config.videoDecoder == .hardware)
+        let plain = try #require(try EmuuCLI.parseAsRoot(["create", "phone"]) as? Create)
+        #expect(try plain.makeConfig(id: InstanceID(rawValue: "phone")!, image: .playStoreDefault).videoDecoder == nil)
+        let start = try #require(try EmuuCLI.parseAsRoot(["start", "phone", "--video-decoder", "software"]) as? Start)
+        #expect(start.videoDecoder == .software)
+    }
 }

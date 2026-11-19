@@ -15,6 +15,7 @@ enum PresetArgument: String, ExpressibleByArgument, CaseIterable, Sendable {
 }
 
 extension GPUMode: ExpressibleByArgument {}
+extension VideoDecoderMode: ExpressibleByArgument {}
 
 struct Create: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -51,6 +52,9 @@ struct Create: AsyncParsableCommand {
     @Flag(help: "Disable guest audio output (the microphone is always off).")
     var noAudio = false
 
+    @Option(help: "Video decoder: auto (default: \(VideoDecoderMode.resolvedDefault.rawValue)), hardware (host VideoToolbox), software (Android's own decoders in the guest), host-software (host ffmpeg). See `emuu video-decoder --help`.")
+    var videoDecoder: VideoDecoderMode?
+
     @Option(help: "Fixed console port (even, 5554-5584); adb uses port+1. Default: first free pair at launch.")
     var port: Int?
 
@@ -79,6 +83,7 @@ struct Create: AsyncParsableCommand {
         if let screen { config.display = try Self.parseScreen(screen) }
         if let gpu { config.gpu = gpu }
         if noAudio { config.audioOutput = false }
+        if let videoDecoder { config.videoDecoder = videoDecoder }
         do { try config.validate() } catch { throw ValidationError(describe(error)) }
         return config
     }

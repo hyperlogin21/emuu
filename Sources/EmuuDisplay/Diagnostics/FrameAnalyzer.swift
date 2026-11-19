@@ -146,7 +146,8 @@ public struct FrameVerdict: Sendable, Hashable {
         case patternLost = "pattern-lost"
         /// Almost all black while the previous frame was not.
         case blank
-        /// Mostly pure green (the classic uninitialised-YUV colour).
+        /// A quarter or more of the screen is decoder green (a video frame whose YUV planes were never written,
+        /// RGB ≈ (0, 135, 0)); see `isDecoderGreen`.
         case green
         /// Generic flicker: differs strongly from both neighbours while the neighbours match each other (A-B-A).
         case flash
@@ -209,6 +210,13 @@ public final class FrameAnalyzer {
 
     public init() {}
 
+    /// The colour of a video frame whose YUV planes are all zero (never written by the decoder): Y = U = V = 0
+    /// converts to RGB ≈ (0, 135, 0) with BT.601 (limited or full range) and ≈ (0, 77, 0) with BT.709. Bright
+    /// pure green (G up to 255) is included too.
+    static func isDecoderGreen(_ c: (Int, Int, Int)) -> Bool {
+        c.1 >= 60 && c.0 < 40 && c.2 < 40
+    }
+
     /// Analyses one frame. Returns the verdict of this frame and, separately, a late verdict for the frame
     /// before it (A-B-A flicker needs the next frame).
     public func analyze(_ px: BGRAPixels, seq: UInt32, arrival: ContinuousClock.Instant,
@@ -232,13 +240,14 @@ public final class FrameAnalyzer {
                 let c = px.rgb(px.width * (2 * gx + 1) / 40, px.height * (2 * gy + 1) / 80)
                 total += 1
                 if c.0 < 16 && c.1 < 16 && c.2 < 16 { black += 1 }
-                if c.1 > 150 && c.0 < 70 && c.2 < 70 { green += 1 }
+                if Self.isDecoderGreen(c) { green += 1 }
             }
         }
         let isBlank = Double(black) / Double(total) > 0.97
         if isBlank && !lastBlank && summary.frames > 1 { verdict.kinds.insert(.blank) }
         lastBlank = isBlank
-        if Double(green) / Double(total) > 0.5 { verdict.kinds.insert(.green) }
+        // A quarter of the screen: a green video area under the app's own UI (TikTok's feed) still counts.
+        if Double(green) / Double(total) > 0.25 { verdict.kinds.insert(.green) }
 
         // Test pattern.
         if rect == nil || !rectStillValid(px) { rect = TestPattern.locate(px) }
