@@ -39,6 +39,37 @@ Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub
 - Verified on a scratch instance through the app's log; CGWindowList could not confirm closes (screen locked: closed
   windows — also ones closed the old way — stayed listed as on screen).
 
+## Status update (2026-11-19, green video area in TikTok / video decoder setting)
+
+- **Reported:** TikTok's video area is solid green ≈ (0, 135, 0) under intact UI = a decoded frame whose YUV planes
+  are all zero → decode path. The user's logcat: TikTok uses the host-backed `c2.goldfish.hevc/h264.decoder`.
+- **Not reproduced** on an isolated instance in ~100 runs: H.264/HEVC 540p…1080p (odd sizes, B-frames, 30/60 fps,
+  12 Mbit/s noise), HEVC Main10/HLG/PQ (rejected by the goldfish decoder → player error, not green), VP9 profile 2,
+  and a new `CodecActivity` in scripts/flicker-test that drives MediaCodec like TikTok (async, flush after start,
+  flush+seek loops, swipes with overlapping release, `setOutputSurface` from a placeholder, 4–6 concurrent decoders,
+  own GL pipeline). 0 green frames in all three decoder modes. **Cause unconfirmed.** The probe's green check could
+  not see this colour before (needed G > 150 over half the screen); fixed.
+- **Found instead (5/5 reproduced):** after any host (goldfish) video decode in a boot, the quick-boot snapshot
+  saved later cannot be loaded (`Missing section footer for …/goldfish_address_space`, `Error -22`) → cold boot,
+  twice with a 15 s main-loop hang and once a signal-11 crash. Guest software decoding: snapshot loads, playback goes on.
+- **Fix:** per-instance `videoDecoder` (`auto|software|hardware|host-software`; `emuu video-decoder`,
+  `create/start --video-decoder`, app memory panel picker, `EMUU_VIDEO_DECODER` override). `auto` = **software**
+  (`-feature -HardwareDecoder`, guest `c2.android.*`). Existing instances (nil setting) get it at their next start
+  with one automatic cold boot (`<avd>/emuu-guest-codecs` records the snapshot's codec set); farm clones keep their
+  golden's codecs. Cost vs VideoToolbox per 1080p30 stream while playing: ≈ +70–90 MB, ≈ +20–30 % of a core; frame
+  rate full except very high-bitrate HEVC 1080p60. docs/engine-findings.md "Video decoding",
+  docs/evidence/video-decoder-2026-11-19.txt.
+- **User check (read-only, while TikTok shows green on `emuu-dev2`)**, serial from `adb devices`:
+  `S=emulator-5554` (adjust), then
+  `adb -s $S shell getprop ro.boot.qemu.hwcodec.hevcdec` (2 = host decoders) ·
+  `adb -s $S shell dumpsys media.resource_manager | grep -E "Pid:|Name: c2"` ·
+  `adb -s $S logcat -d -v time | grep -iE "goldfish|CCodec|Codec2Client|MediaCodec|TTPlayer|TTVideoEngine" | tail -300 > ~/Desktop/emuu-green-logcat.txt` ·
+  `grep -nE "goldfish_address_space|Error -|Loading snapshot|Successfully loaded|Failed to load|Boot completed|hanging|VideoToolBox|no frame" ~/.emuu/logs/engine-emuu-dev2.log | tail -60` ·
+  `emuu debug display-probe emuu-dev2 --duration 20 --save ~/Desktop/emuu-green` (the probe now counts this green).
+  Run these with the build that shows the green (before restarting). With the new build the next start of
+  `emuu-dev2` switches to software decoding by itself (one cold boot; the signed-in account and data stay);
+  `emuu video-decoder status emuu-dev2` confirms it, `emuu video-decoder hardware emuu-dev2` goes back.
+
 ## Status update (2026-11-19, display flicker in HD video / TikTok)
 
 - **Reported:** flicker in HD video (TikTok) in the native display. Investigated on an isolated instance with a

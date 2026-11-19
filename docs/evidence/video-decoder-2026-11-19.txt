@@ -1,0 +1,148 @@
+Video decoder investigation (green video area in TikTok), 2026-11-19. Isolated EMUU_HOME, scratch instance gv1:
+2048 MB, 4 vCPUs, 720x1600@320, -gpu host, emulator 36.4.9, android-36.1 google_apis_playstore arm64. Apple M5, 10 cores, 16 GB.
+Another agent's emulator work ran on the same Mac part of the time: CPU figures are +-30 %.
+
+Columns: probe artefacts (scripts/flicker-test + emuu debug display-probe, 15 s per row, green = >=25 % of the screen
+decoder green), distinct test-pattern frames per second and skipped counters (frames never shown), engine (QEMU)
+CPU in % of one core over the probe, VTDecoderXPCService CPU (macOS VideoToolbox service, shared with other apps),
+footprint(1) of the engine at the end (NOT comparable across modes here: the software run had been through a
+snapshot resume, which makes all guest RAM resident; see the fair comparison at the end), codecs the guest created.
+out-of-order in loop/swipe rows is by design (the clip restarts).
+
+== 1. MediaPlayer sweep, default (hardware) mode, 6 s each: sizes, HEVC 8/10-bit, HDR, VP9 profile 2
+mp-surface-p1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 376 frames: 30.2 distinct frames/s, duplicates 187, skipped counters 0  |    1 Created component [c2.goldfish.h264.decoder]  | 
+mp-texture-p1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 376 frames: 30.2 distinct frames/s, duplicates 187, skipped counters 0  |    1 Created component [c2.goldfish.h264.decoder]  | 
+mp-surface-p576x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 365 frames: 30.2 distinct frames/s, duplicates 182, skipped counters 0  |    1 Created component [c2.goldfish.h264.decoder]  | 
+mp-texture-p576x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 365 frames: 30.2 distinct frames/s, duplicates 182, skipped counters 0  |    1 Created component [c2.goldfish.h264.decoder]  | 
+mp-surface-p540x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 360 frames: 30.1 distinct frames/s, duplicates 180, skipped counters 0  |    1 Created component [c2.goldfish.h264.decoder]  | 
+mp-texture-p540x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 367 frames: 30.2 distinct frames/s, duplicates 183, skipped counters 0  |    1 Created component [c2.goldfish.h264.decoder]  | 
+mp-surface-o718x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 379 frames: 30.2 distinct frames/s, duplicates 189, skipped counters 0  |    1 Created component [c2.goldfish.h264.decoder]  | 
+mp-texture-o718x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 359 frames: 30.1 distinct frames/s, duplicates 179, skipped counters 0  |    1 Created component [c2.goldfish.h264.decoder]  | 
+mp-surface-h1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 373 frames: 30.2 distinct frames/s, duplicates 186, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-texture-h1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 379 frames: 30.1 distinct frames/s, duplicates 189, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-surface-h720x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 371 frames: 30.2 distinct frames/s, duplicates 185, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-texture-h720x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 373 frames: 30.2 distinct frames/s, duplicates 186, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-surface-h576x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 372 frames: 30.1 distinct frames/s, duplicates 186, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-texture-h576x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 376 frames: 30.0 distinct frames/s, duplicates 188, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-surface-h540x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 361 frames: 30.2 distinct frames/s, duplicates 180, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-texture-h540x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 373 frames: 30.0 distinct frames/s, duplicates 187, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-surface-hlg1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern not on screen (generic checks only)  |    1 Created component [c2.goldfish.hevc.decoder]  |    1 E NuPlayer: received error(0xffffffda) from vi
+mp-texture-hlg1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern not on screen (generic checks only)  |    1 Created component [c2.goldfish.hevc.decoder]  |    1 E NuPlayer: received error(0xffffffda) from vi
+mp-surface-pq1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern not on screen (generic checks only)  |    1 Created component [c2.goldfish.hevc.decoder]  |    1 E NuPlayer: received error(0xffffffda) from vid
+mp-texture-pq1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern not on screen (generic checks only)  |    1 Created component [c2.goldfish.hevc.decoder]  |    1 E NuPlayer: received error(0xffffffda) from vid
+mp-surface-v10_1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 361 frames: 30.2 distinct frames/s, duplicates 180, skipped counters 0  |    1 Created component [c2.goldfish.vp9.decoder]  |    1 I C2Gold
+mp-texture-v10_1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 372 frames: 30.0 distinct frames/s, duplicates 186, skipped counters 0  |    1 Created component [c2.goldfish.vp9.decoder]  |    1 I C2Gold
+mp-surface-nh1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 373 frames: 30.2 distinct frames/s, duplicates 186, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+mp-texture-nh1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 365 frames: 30.2 distinct frames/s, duplicates 182, skipped counters 0  |    1 Created component [c2.goldfish.hevc.decoder]  | 
+
+== 2. TikTok-like MediaCodec scenarios (CodecActivity), default (hardware) mode
+d-swipe2-mixed720 | torn 0, out-of-order 11, pattern-lost 0, blank 0, green 0, flash 0  (total 11) |  test pattern in 616 frames: 2.9 distinct frames/s, duplicates 5, skipped counters 0  | top=dev.emuu.flickertest/.CodecActivity |    6 Created component [c2.goldfish.h264.decoder]    6 Created compon
+d-swipe1-mixed1080 | torn 0, out-of-order 24, pattern-lost 0, blank 0, green 0, flash 0  (total 24) |  test pattern in 620 frames: 1.5 distinct frames/s, duplicates 19, skipped counters 4  | top=dev.emuu.flickertest/.CodecActivity |   12 Created component [c2.goldfish.h264.decoder]   12 Created comp
+d-swipe2-ph300-mixed | torn 0, out-of-order 13, pattern-lost 0, blank 0, green 0, flash 0  (total 13) |  test pattern in 496 frames: 2.3 distinct frames/s, duplicates 13, skipped counters 11  | top=dev.emuu.flickertest/.CodecActivity |    6 Created component [c2.goldfish.h264.decoder]    6 Created c
+d-pingpong400-h264-1080 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 334 frames: 15.2 distinct frames/s, duplicates 20, skipped counters 321  | top=dev.emuu.flickertest/.CodecActivity |    1 Created component [c2.goldfish.h264.decoder]  |    1 I C
+d-pingpong400-hevc-1080 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 336 frames: 15.3 distinct frames/s, duplicates 20, skipped counters 317  | top=dev.emuu.flickertest/.CodecActivity |    1 Created component [c2.goldfish.hevc.decoder]  | 
+d-pingpong400-h264-720 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0  (total 0) |  test pattern in 338 frames: 15.4 distinct frames/s, duplicates 21, skipped counters 317  | top=dev.emuu.flickertest/.CodecActivity |    1 Created component [c2.goldfish.h264.decoder]  | 
+d-h264-1080-flush30 | torn 0, out-of-order 61, pattern-lost 0, blank 0, green 0, flash 0  (total 61) |  test pattern in 935 frames: 1.5 distinct frames/s, duplicates 0, skipped counters 659  | top=dev.emuu.flickertest/.CodecActivity |    1 Created component [c2.goldfish.h264.decoder]  | 
+d-swipe1-sizes | torn 0, out-of-order 66, pattern-lost 0, blank 0, green 0, flash 1  (total 67) |  test pattern in 705 frames: 1.0 distinct frames/s, duplicates 22, skipped counters 282  | top=dev.emuu.flickertest/.CodecActivity |   12 Created component [c2.goldfish.h264.decoder]   12 Created compon
+(earlier c-* runs omitted: H.264 items stalled because CSD was not resubmitted after the early flush; fixed in the APK)
+
+== 3. Decoder matrix: software
+software-mp-p720x30          | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.2 skipped 1 | engine CPU 87% VTB-XPC 0% | footprint 3021 MB | c2.android.avc.decoder | errors 0
+software-mp-p720x60          | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 60.0 skipped 2 | engine CPU 111% VTB-XPC 0% | footprint 3025 MB | c2.android.avc.decoder | errors 0
+software-mp-p1080x30         | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 80% VTB-XPC 0% | footprint 3107 MB | c2.android.avc.decoder | errors 0
+software-mp-p1080x60         | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 55.1 skipped 80 | engine CPU 136% VTB-XPC 0% | footprint 3102 MB | c2.android.avc.decoder | errors 0
+software-mp-tex-p1080x60     | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 60.0 skipped 2 | engine CPU 96% VTB-XPC 0% | footprint 3097 MB | c2.android.avc.decoder | errors 0
+software-mp-feed-p1080x30    | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 76% VTB-XPC 0% | footprint 3105 MB | c2.android.avc.decoder | errors 0
+software-mp-h1080x30         | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 78% VTB-XPC 0% | footprint 3105 MB | c2.android.hevc.decoder | errors 0
+software-mp-h1080x60         | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.9 skipped 3 | engine CPU 132% VTB-XPC 0% | footprint 3119 MB | c2.android.hevc.decoder | errors 0
+software-mp-noisy-n1080x30   | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 111% VTB-XPC 0% | footprint 3113 MB | c2.android.avc.decoder | errors 0
+software-mp-noisy-nh1080x30  | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 104% VTB-XPC 0% | footprint 3113 MB | c2.android.hevc.decoder | errors 0
+software-mp-noisy-n1080x60   | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.9 skipped 1 | engine CPU 120% VTB-XPC 0% | footprint 3129 MB | c2.android.avc.decoder | errors 0
+software-mp-noisy-nh1080x60  | torn 0, out-of-order 1, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 4.1 skipped 70 | engine CPU 206% VTB-XPC 0% | footprint 3133 MB | c2.android.hevc.decoder | errors 0
+software-codec-swipe2-mixed  | torn 0, out-of-order 7, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 3.8 skipped 7 | engine CPU 60% VTB-XPC 0% | footprint 2789 MB | c2.android.avc.decoder,c2.android.hevc.decoder | errors 0
+software-codec-gl-h1080x30   | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.2 skipped 0 | engine CPU 79% VTB-XPC 0% | footprint 2851 MB | c2.android.hevc.decoder | errors 0
+software-codec-flush30-h1080 | torn 0, out-of-order 25, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 1.8 skipped 185 | engine CPU 72% VTB-XPC 0% | footprint 2872 MB | c2.android.hevc.decoder | errors 0
+software-codec-preload4      | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 131% VTB-XPC 0% | footprint 3135 MB | c2.android.avc.decoder,c2.android.hevc.decoder | errors 0
+
+== 3. Decoder matrix: hardware
+hardware-mp-p720x30          | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.0 skipped 1 | engine CPU 90% VTB-XPC 0% | footprint 2363 MB | c2.goldfish.h264.decoder | errors 0
+hardware-mp-p720x60          | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.6 skipped 8 | engine CPU 92% VTB-XPC 3% | footprint 2376 MB | c2.goldfish.h264.decoder | errors 0
+hardware-mp-p1080x30         | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.2 skipped 0 | engine CPU 63% VTB-XPC 2% | footprint 2491 MB | c2.goldfish.h264.decoder | errors 0
+hardware-mp-p1080x60         | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.9 skipped 2 | engine CPU 70% VTB-XPC 4% | footprint 2495 MB | c2.goldfish.h264.decoder | errors 0
+hardware-mp-tex-p1080x60     | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 36.1 skipped 384 | engine CPU 91% VTB-XPC 5% | footprint 2500 MB | c2.goldfish.h264.decoder | errors 0
+hardware-mp-feed-p1080x30    | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 90% VTB-XPC 3% | footprint 2519 MB | c2.goldfish.h264.decoder | errors 0
+hardware-mp-h1080x30         | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 93% VTB-XPC 3% | footprint 2514 MB | c2.goldfish.hevc.decoder | errors 0
+hardware-mp-h1080x60         | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.9 skipped 2 | engine CPU 100% VTB-XPC 5% | footprint 2535 MB | c2.goldfish.hevc.decoder | errors 0
+hardware-mp-noisy-n1080x30   | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.2 skipped 0 | engine CPU 90% VTB-XPC 3% | footprint 2542 MB | c2.goldfish.h264.decoder | errors 0
+hardware-mp-noisy-nh1080x30  | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.0 skipped 1 | engine CPU 91% VTB-XPC 3% | footprint 2554 MB | c2.goldfish.hevc.decoder | errors 0
+hardware-mp-noisy-n1080x60   | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.9 skipped 2 | engine CPU 81% VTB-XPC 4% | footprint 2572 MB | c2.goldfish.h264.decoder | errors 0
+hardware-mp-noisy-nh1080x60  | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.7 skipped 2 | engine CPU 90% VTB-XPC 4% | footprint 2587 MB | c2.goldfish.hevc.decoder | errors 0
+hardware-codec-swipe2-mixed  | torn 0, out-of-order 7, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 3.8 skipped 12 | engine CPU 45% VTB-XPC 3% | footprint 2511 MB | c2.goldfish.h264.decoder,c2.goldfish.hevc.decoder | errors 0
+hardware-codec-gl-h1080x30   | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 0 | engine CPU 78% VTB-XPC 3% | footprint 2618 MB | c2.goldfish.hevc.decoder | errors 0
+hardware-codec-flush30-h1080 | torn 0, out-of-order 46, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 1.9 skipped 555 | engine CPU 68% VTB-XPC 7% | footprint 2641 MB | c2.goldfish.hevc.decoder | errors 0
+hardware-codec-preload4      | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 25.6 skipped 71 | engine CPU 75% VTB-XPC 8% | footprint 2861 MB | c2.goldfish.h264.decoder,c2.goldfish.hevc.decoder | errors 0
+
+== 3. Decoder matrix: host-software
+host-software-mp-p720x30     | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.2 skipped 0 | engine CPU 124% VTB-XPC 0% | footprint 2304 MB |  | errors 0
+host-software-mp-p720x60     | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 60.0 skipped 2 | engine CPU 90% VTB-XPC 0% | footprint 2366 MB | c2.goldfish.h264.decoder | errors 0
+host-software-mp-p1080x30    | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 71% VTB-XPC 0% | footprint 2474 MB | c2.goldfish.h264.decoder | errors 0
+host-software-mp-p1080x60    | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.9 skipped 2 | engine CPU 77% VTB-XPC 0% | footprint 2480 MB | c2.goldfish.h264.decoder | errors 0
+host-software-mp-tex-p1080x60 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 31.4 skipped 437 | engine CPU 71% VTB-XPC 0% | footprint 2474 MB | c2.goldfish.h264.decoder | errors 0
+host-software-mp-feed-p1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.2 skipped 0 | engine CPU 153% VTB-XPC 0% | footprint 2653 MB | c2.goldfish.h264.decoder | errors 0
+host-software-mp-h1080x30    | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 1 | engine CPU 152% VTB-XPC 0% | footprint 2658 MB | c2.goldfish.hevc.decoder | errors 0
+host-software-mp-h1080x60    | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 59.2 skipped 14 | engine CPU 217% VTB-XPC 0% | footprint 2851 MB | c2.goldfish.hevc.decoder | errors 0
+host-software-mp-noisy-n1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.0 skipped 2 | engine CPU 199% VTB-XPC 0% | footprint 2849 MB | c2.goldfish.h264.decoder | errors 0
+host-software-mp-noisy-nh1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 29.9 skipped 3 | engine CPU 190% VTB-XPC 0% | footprint 2869 MB | c2.goldfish.hevc.decoder | errors 0
+host-software-mp-noisy-n1080x60 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 56.7 skipped 55 | engine CPU 190% VTB-XPC 0% | footprint 2877 MB | c2.goldfish.h264.decoder | errors 0
+host-software-mp-noisy-nh1080x60 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 41.1 skipped 294 | engine CPU 157% VTB-XPC 0% | footprint 2899 MB | c2.goldfish.hevc.decoder | errors 0
+host-software-codec-swipe2-mixed | torn 0, out-of-order 7, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 3.8 skipped 2 | engine CPU 203% VTB-XPC 0% | footprint 2785 MB | c2.goldfish.h264.decoder,c2.goldfish.hevc.decoder | errors 0
+host-software-codec-gl-h1080x30 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 30.1 skipped 0 | engine CPU 212% VTB-XPC 0% | footprint 2870 MB | c2.goldfish.hevc.decoder | errors 0
+host-software-codec-flush30-h1080 | torn 0, out-of-order 41, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 1.9 skipped 423 | engine CPU 195% VTB-XPC 0% | footprint 2908 MB | c2.goldfish.hevc.decoder | errors 0
+host-software-codec-preload4 | torn 0, out-of-order 0, pattern-lost 0, blank 0, green 0, flash 0 | distinct/s 24.9 skipped 81 | engine CPU 179% VTB-XPC 0% | footprint 3146 MB | c2.goldfish.h264.decoder,c2.goldfish.hevc.decoder | errors 0
+
+== 2b. More TikTok-like scenarios, default (hardware) mode (copied from the console)
+c-hevc720-placeholder500  | green 0, blank 0, torn 0 | 29.0 distinct/s | c2.goldfish.hevc  (configure on off-screen SurfaceTexture, setOutputSurface after 500 ms)
+c-h264csd-ph500           | green 0, blank 0, torn 0 | 30.1 distinct/s | c2.goldfish.h264
+c-hevc1080-placeholder500 | green 0, blank 0, torn 0 | 29.2 distinct/s | c2.goldfish.hevc
+g-hevc720 / g-h264-720 / g-hevc1080 / g-h264-1080 (app's own GL: SurfaceTexture + samplerExternalOES) | green 0 each | 30.0-30.2 distinct/s
+g-swipe2-mixed (GL, 6 items HEVC/H.264 576..1080, loop every 25 frames) | green 0, torn 0 | 6+6 codecs
+p-preload3-hevc / p-preload5-hevc / p-preload5-h264 (4-6 concurrent decoders) | green 0 | 28.6 / 29.8 / 30.1 distinct/s
+p-preload4-mixed-swipe | green 0 | 8 h264 + 9 hevc codecs
+c-hevc720-flushloop60 (flush+seek every 60 frames, 16 loops) | green 0
+
+== 2c. Codec facts
+* c2.goldfish.hevc.decoder advertises Main and MainStill only (dumpsys media.player); a Main10 / HLG / PQ clip
+  fails in the guest helper: "GoldfishHevcHelper: error in decodeHeader: 0x43dd" -> MediaCodec err 0xe -> player error
+  (not green). VP9 profile 2 (10-bit) plays on c2.goldfish.vp9.decoder.
+* flush() right after start() drops the codec-specific data given to configure(); without resubmitting it the
+  H.264 decoder never outputs a frame (black, not green). TikTok's log shows output after its early flush, so it
+  resubmits; CodecActivity now does too.
+* ANDROID_EMU_MEDIA_DECODER_VTB (36.4.9, disassembly of MediaH264DecoderGeneric/MediaHevcDecoderGeneric::init*):
+  only the exact value "0" skips VideoToolbox (ffmpeg path); unset or anything else = VideoToolbox.
+* Per codec: -append-userspace-opt androidboot.qemu.hwcodec.hevcdec=0 replaces the engine's hevcdec=2 on the kernel
+  command line (ro.boot.qemu.hwcodec.hevcdec=0, avcdec/vpxdec stay 2): HEVC then uses c2.android.hevc.decoder,
+  H.264 stays c2.goldfish.h264.decoder. Verified once by a direct engine launch (cold boot). Not offered as a mode.
+
+== 4. Quick-boot snapshots after host video decoding (hibernate = console kill, then resume)
+hardware, CodecActivity swiping HEVC/H.264 (2 decoders alive)  -> load fails: "Missing section footer for
+    0000:00:0b.0/goldfish_address_space, expecting: 0x18", "Error -22 while loading VM state"; the fallback cold boot
+    hung ("detected a hanging thread 'QEMU2 main loop'. No response for 15008 ms") on two launches, the supervisor
+    recorded "engine crashed (engine signal 11 ...)" for the second; the third launch: "Error -1 from the snapshot callback", cold boot OK.
+hardware, MediaPlayer HEVC playing (1 decoder)                   -> same "Missing section footer ... goldfish_address_space"
+hardware, cold boot, no video, hibernate/resume                  -> "Successfully loaded snapshot 'default_boot' using 385 ms"
+hardware, quick-booted session, video played, app force-stopped  -> load fails (Error -22), main loop hang
+hardware, cold boot, video played, app force-stopped, hibernate  -> load fails (Error -22)
+host-software, MediaPlayer HEVC playing                          -> load fails (Error -22)
+software, CodecActivity swiping HEVC/H.264 (c2.android.*)        -> "Successfully loaded snapshot 'default_boot' using 714 ms",
+                                                                    playback continued, probe 0 green / 0 blank / 0 torn
+=> Once a goldfish (host) decoder has been used in a boot, every later quick-boot snapshot of that boot is
+   unloadable. Released decoders do not help.
+
+== 5. Fair memory/CPU comparison: cold boot each mode (EMUU_VIDEO_DECODER=<mode>), 60 s settle, 60 s per clip (MediaPlayer, SurfaceView)
+footprint(1) total; phys_footprint (top MEM) counts guest RAM twice, see Farm findings
+software h1080x30.mp4 | idle footprint 2157 MB (phys_footprint 4201M) | playing 60 s: engine CPU 103% | footprint 2488 MB (phys_footprint 4570M) | Name: c2.android.hevc.decoder
+software p1080x30.mp4 | idle footprint 2157 MB (phys_footprint 4201M) | playing 60 s: engine CPU 96% | footprint 2541 MB (phys_footprint 4639M) | Name: c2.android.avc.decoder
+hardware h1080x30.mp4 | idle footprint 2213 MB (phys_footprint 4257M) | playing 60 s: engine CPU 73% | footprint 2422 MB (phys_footprint 4466M) | Name: c2.goldfish.hevc.decoder
+hardware p1080x30.mp4 | idle footprint 2213 MB (phys_footprint 4257M) | playing 60 s: engine CPU 78% | footprint 2451 MB (phys_footprint 4495M) | Name: c2.goldfish.h264.decoder
+host-software h1080x30.mp4 | idle footprint 2139 MB (phys_footprint 4183M) | playing 60 s: engine CPU 57% | footprint 2428 MB (phys_footprint 4471M) | Name: c2.goldfish.hevc.decoder
+host-software p1080x30.mp4 | idle footprint 2139 MB (phys_footprint 4183M) | playing 60 s: engine CPU 55% | footprint 2458 MB (phys_footprint 4502M) | Name: c2.goldfish.h264.decoder

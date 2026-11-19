@@ -215,6 +215,78 @@ below was checked against 36.4.9 with an isolated instance (lite, 720x1600) and 
 * **Engine cost.** 60 fps MMAP streaming added roughly 10 points of one host core to the QEMU process during
   continuous swipes (≈84 % without a client, ≈94–95 % with one); guest CPU unchanged (see BENCHMARKS.md).
 
+## Video decoding (measured 2026-11-19, green video in TikTok)
+
+Isolated instance (2048 MB, 4 vCPUs, 720x1600, `-gpu host`); raw numbers in
+docs/evidence/video-decoder-2026-11-19.txt. CPU ±30 % (another agent's emulator work ran at the same time).
+
+* **Three decode paths.** The engine feature `HardwareDecoder` (on in `lib/advancedFeatures.ini`) puts
+  `androidboot.qemu.hwcodec.{avc,hevc,vpx}dec=2` on the kernel command line; the guest then registers
+  `c2.goldfish.{h264,hevc,vp8,vp9}.decoder` (rank 512, max 4 instances each), which pass the bitstream to the host
+  over the `goldfish_address_space` device. The host decodes with VideoToolbox (`MediaVideoToolBoxVideoHelper`,
+  `…HevcVideoHelper`) or, with `ANDROID_EMU_MEDIA_DECODER_VTB=0`, ffmpeg, into host colour buffers. Streams above
+  1 MP (w×h > 1 000 000) with the host renderer decode straight into a GPU texture, smaller ones go through a CPU
+  copy (disassembly of `MediaH264DecoderGeneric::initH264ContextInternal`; the env var is compared with exactly
+  `"0"`, nothing else turns VideoToolbox off). `-feature -HardwareDecoder` drops the boot properties and the guest
+  uses Android's own `c2.android.{avc,hevc,vp8,vp9}.decoder` (software, in the guest's `media.swcodec`).
+* **Per codec:** `-append-userspace-opt androidboot.qemu.hwcodec.hevcdec=0` replaces the engine's value
+  (`ro.boot.qemu.hwcodec.hevcdec=0`, the others stay 2): HEVC then goes to `c2.android.hevc.decoder`, H.264 stays on
+  the host. Verified once by a direct engine launch; not offered as an Emuu mode (it does not avoid the snapshot
+  problem below, which any goldfish codec triggers).
+* **The goldfish HEVC decoder advertises Main only.** Main10 / HLG / PQ clips fail in the guest helper
+  (`GoldfishHevcHelper: error in decodeHeader: 0x43dd`, MediaCodec error 0xe): a player error, not green. VP9
+  profile 2 plays.
+* **Green was not reproduced.** 0 green frames in every run, in all three modes, with: H.264 High with B-frames
+  and HEVC Main at 540x960, 576x1024, 718x1278 (not 16-aligned), 720x1280, 1080x1920, 30/60 fps, flat and
+  12 Mbit/s noise; MediaPlayer in SurfaceView/TextureView/in-feed; and TikTok's MediaCodec pattern from the user's
+  logcat (async MediaCodec to a Surface, `KEY_PRIORITY` 0, `flush()` right after `start()`, looping by `flush()` +
+  seek on the same codec down to every 20–30 frames, swipes alternating HEVC/H.264 every 1–2 s with the previous
+  codec released on another thread, `setOutputSurface()` from an off-screen placeholder and ping-pong every
+  400 ms, 4–6 concurrent decoders, decoding into the app's own GL pipeline via SurfaceTexture). The probe's green
+  test was also fixed: it required G > 150 over half the screen, so it could never have counted the reported
+  (0, 135, 0) under TikTok's UI (that colour is Y = U = V = 0 in BT.601; it now counts G ≥ 60, R/B < 40 over ≥ 25 %).
+* **Quick-boot snapshots break after host video decoding (5 of 5 attempts with host decoding, 0 of 1 with software).** Once a
+  goldfish decoder has been used in a boot, a snapshot saved later in that boot cannot be loaded: "Missing section
+  footer for 0000:00:0b.0/goldfish_address_space, expecting: 0x18", "Error -22 while loading VM state", then a
+  cold boot, which twice hung the QEMU main loop for 15 s and once ended with signal 11. It happens with the video
+  playing or after the app was force-stopped, with VideoToolbox or ffmpeg. With guest software decoders a snapshot
+  saved during playback loaded in 714 ms and playback went on. Consequence for Emuu with host decoding: hibernate
+  (window close, governor, `emuu hibernate`) after any video loses the RAM state and may crash the engine, and a
+  golden sealed after playing a video would not resume.
+* **Frame rate / CPU** (15 s per row, test pattern counts distinct frames; engine CPU in % of one core):
+
+  | Scenario | software (guest) | hardware (VideoToolbox) | host-software (ffmpeg) |
+  | --- | --- | --- | --- |
+  | H.264 720p30 / 720p60, SurfaceView | 30.2 / 60.0 fps, 87 / 111 % | 30.0 / 59.6 fps, 90 / 92 % | 30.2 / 60.0 fps, 124 / 90 % |
+  | H.264 1080p30 / 1080p60, SurfaceView | 30.1 / 55.1 fps, 80 / 136 % | 30.2 / 59.9 fps, 63 / 70 % | 30.1 / 59.9 fps, 71 / 77 % |
+  | H.264 1080p60, TextureView | 60.0 fps, 96 % | 36.1 fps, 91 % | 31.4 fps, 71 % |
+  | HEVC 1080p30 / 1080p60 | 30.1 / 59.9 fps, 78 / 132 % | 30.1 / 59.9 fps, 93 / 100 % | 30.1 / 59.2 fps, 152 / 217 % |
+  | 12 Mbit/s noise H.264 1080p30 / 60 | 30.1 / 59.9 fps, 111 / 120 % | 30.2 / 59.9 fps, 90 / 81 % | 30.0 / 56.7 fps, 199 / 190 % |
+  | 10 Mbit/s noise HEVC 1080p30 / 60 | 30.1 / **4.1** fps, 104 / 206 % | 30.0 / 59.7 fps, 91 / 90 % | 29.9 / 41.1 fps, 190 / 157 % |
+  | TikTok-like: 4 concurrent decoders | 30.1 fps, 131 % | 25.6 fps, 75 % | 24.9 fps, 179 % |
+  | TikTok-like: swipe every 2 s, HEVC/H.264 mixed | 0 artefacts, 60 % | 0 artefacts, 45 % | 0 artefacts, 203 % |
+
+  VideoToolbox's own XPC service added 0–8 % (hardware only). The guest decoders keep up with everything a
+  short-video feed serves (≤ 1080p, ~30 fps, a few Mbit/s); only a 10 Mbit/s HEVC 1080p60 stress clip overloaded
+  them (4.1 distinct frames/s).
+* **Memory** (fair comparison: cold boot, 60 s settle, then 60 s of each clip; `footprint` / `phys_footprint`):
+
+  | | software (guest) | hardware (VideoToolbox) | host-software (ffmpeg) |
+  | --- | --- | --- | --- |
+  | idle, 60 s after cold boot | 2157 MB (4201 MB) | 2213 MB (4257 MB) | 2139 MB (4183 MB) |
+  | playing HEVC 1080p30 | 2488 MB (4570 MB), CPU 103 % | 2422 MB (4466 MB), CPU 73 % | 2428 MB (4471 MB), CPU 57 % |
+  | playing H.264 1080p30 | 2541 MB (4639 MB), CPU 96 % | 2451 MB (4495 MB), CPU 78 % | 2458 MB (4502 MB), CPU 55 % |
+
+  Guest software decoding costs ≈ 70–90 MB more host footprint and ≈ 20–30 points of one core more than
+  VideoToolbox per 1080p30 stream, only while video plays; idle is the same. The host-software CPU figures here
+  (55–57 %) disagree with the matrix above (71–217 %), so CPU differences under ~50 points are within the noise of
+  this Mac at that time. For a farm of 2 emulators on 16 GB this is ≈ 0.2 GB and ≈ half a core at most.
+* **Default: `software`** (`VideoDecoderMode.resolvedDefault`). Reasons: the snapshot defect above (hibernate,
+  resume and golden snapshots are central to Emuu and the farm), the reported green frames are on the host path
+  (inferred: TikTok used `c2.goldfish.*` in the user's log; not reproduced), and the measured cost is small.
+  `hardware` stays available per instance (`emuu video-decoder hardware`) for heavy high-bitrate 1080p60 HEVC,
+  where VideoToolbox is clearly better.
+
 ## Spontaneous guest restart after a quick-boot load (observed, cause open)
 
 * On `agent-test` (2026-11-19 00:09 UTC), a quick-boot resume restarted the guest kernel by itself ~2–8 s after

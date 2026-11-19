@@ -10,6 +10,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".CodecActivity" android:exported="true" android:screenOrientation="portrait"
+                  android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <activity android:name=".GLActivity" android:exported="true" android:screenOrientation="portrait"
                   android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>

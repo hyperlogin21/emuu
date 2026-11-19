@@ -207,13 +207,15 @@ final class LocalLineServer: @unchecked Sendable {
 @Suite struct CommandLineTests {
     @Test func headlessArgumentsFromConfig() throws {
         var config = InstancePreset.standard.makeConfig(id: InstanceID(rawValue: "emuu-dev")!)
+        config.videoDecoder = .hardware   // the engine default: no decoder flags
         let ports = try InstancePorts(console: 5580)
-        var args = EngineCommandLine.arguments(for: config, ports: ports, options: EngineLaunchOptions())
+        var args = EngineCommandLine.arguments(for: config, ports: ports, options: EngineLaunchOptions(), videoDecoder: .hardware)
         #expect(args == ["-avd", "emuu-dev", "-no-window", "-no-boot-anim", "-ports", "5580,5581", "-gpu", "host",
                          "-memory", "2048", "-cores", "4", "-no-metrics", "-netfast"])
         config.audioOutput = false
         args = EngineCommandLine.arguments(for: config, ports: ports,
-                                           options: EngineLaunchOptions(coldBoot: true, netfast: false, extraArguments: ["-no-sim"], qemuArguments: ["-device", "x"]))
+                                           options: EngineLaunchOptions(coldBoot: true, netfast: false, extraArguments: ["-no-sim"], qemuArguments: ["-device", "x"]),
+                                           videoDecoder: .hardware)
         #expect(args.suffix(6) == ["-no-audio", "-no-snapshot-load", "-no-sim", "-qemu", "-device", "x"])
         #expect(!args.contains("-netfast"))
         #expect(EngineCommandLine.consolePort(fromArguments: args) == 5580)
@@ -241,6 +243,55 @@ final class LocalLineServer: @unchecked Sendable {
         #expect(env["ANDROID_AVD_HOME"] == w.paths.avdHome.path)
         #expect(env["ANDROID_SDK_ROOT"] == w.sdk.root.path)
         #expect(!env.values.contains { $0.contains("/.android") })
+    }
+
+    @Test func videoDecoderModesMapToEngineFlagsAndEnvironment() throws {
+        let w = try TempWorld()
+        let config = InstancePreset.standard.makeConfig(id: InstanceID(rawValue: "vd")!)
+        let ports = try InstancePorts(console: 5570)
+        func args(_ m: VideoDecoderMode) -> [String] {
+            EngineCommandLine.arguments(for: config, ports: ports, options: EngineLaunchOptions(extraArguments: ["-x"]), videoDecoder: m)
+        }
+        // Guest software codecs: the engine feature that registers the goldfish (host) codecs is turned off,
+        // before any extra arguments.
+        #expect(Array(args(.software).suffix(3)) == ["-feature", "-HardwareDecoder", "-x"])
+        #expect(!args(.hardware).contains("-feature") && !args(.hostSoftware).contains("-feature"))
+        #expect(args(.auto) == args(VideoDecoderMode.resolvedDefault))
+        // Host decoding: VideoToolbox on/off through the engine's own variable ("0" is the only value that disables it).
+        #expect(EngineCommandLine.environment(paths: w.paths, sdk: w.sdk, videoDecoder: .hostSoftware)["ANDROID_EMU_MEDIA_DECODER_VTB"] == "0")
+        #expect(EngineCommandLine.environment(paths: w.paths, sdk: w.sdk, videoDecoder: .hardware)["ANDROID_EMU_MEDIA_DECODER_VTB"] == "1")
+        #expect(EngineCommandLine.environment(paths: w.paths, sdk: w.sdk)["ANDROID_EMU_MEDIA_DECODER_VTB"] == nil)
+    }
+
+    @Test func decoderChangeColdBootsOnceAndClonesKeepTheGoldenSnapshot() {
+        typealias E = EngineInstance
+        // No snapshot or an explicit cold boot: launch as asked.
+        #expect(E.videoDecoderPlan(desired: .software, snapshotCodecs: nil, hasQuickBootSnapshot: false, coldBoot: false, isClone: false) == (.software, false, nil))
+        // A snapshot from before the setting (no marker) has host codecs: switching to software cold-boots once…
+        let legacy = E.videoDecoderPlan(desired: .software, snapshotCodecs: nil, hasQuickBootSnapshot: true, coldBoot: false, isClone: false)
+        #expect(legacy.mode == .software && legacy.coldBoot && legacy.note != nil)
+        // …and the next start (marker now "guest") quick-boots.
+        #expect(E.videoDecoderPlan(desired: .software, snapshotCodecs: .guest, hasQuickBootSnapshot: true, coldBoot: false, isClone: false) == (.software, false, nil))
+        // Hardware ↔ host-software share the guest codecs: no cold boot. `auto` resolves first.
+        #expect(E.videoDecoderPlan(desired: .hostSoftware, snapshotCodecs: .host, hasQuickBootSnapshot: true, coldBoot: false, isClone: false) == (.hostSoftware, false, nil))
+        #expect(E.videoDecoderPlan(desired: .auto, snapshotCodecs: nil, hasQuickBootSnapshot: false, coldBoot: false, isClone: false).mode == VideoDecoderMode.resolvedDefault)
+        // Back to hardware from a guest-codec snapshot also cold-boots.
+        #expect(E.videoDecoderPlan(desired: .hardware, snapshotCodecs: .guest, hasQuickBootSnapshot: true, coldBoot: false, isClone: false).coldBoot)
+        // A farm clone never saves, so it keeps the golden's codecs instead of cold-booting on every start.
+        let clone = E.videoDecoderPlan(desired: .software, snapshotCodecs: nil, hasQuickBootSnapshot: true, coldBoot: false, isClone: true)
+        #expect(clone.mode == .hardware && !clone.coldBoot && clone.note?.contains("re-seal") == true)
+    }
+
+    @Test func guestCodecsMarkerRoundTrips() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vd-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(EngineInstance.readGuestCodecsMarker(dir) == nil)
+        EngineInstance.writeGuestCodecsMarker(dir, .guest)
+        #expect(EngineInstance.readGuestCodecsMarker(dir) == .guest)
+        EngineInstance.writeGuestCodecsMarker(dir, .host)
+        #expect(EngineInstance.readGuestCodecsMarker(dir) == .host)
+        #expect(!EngineInstance.hasQuickBootSnapshot(dir.appendingPathComponent("snapshots")))
     }
 
     @Test func portAllocatorSkipsBusyPairs() {

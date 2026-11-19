@@ -45,7 +45,8 @@ public enum EngineCommandLine {
     ///   engine binds it on 127.0.0.1 only and, with `-grpc-use-token`, requires the random bearer token it
     ///   writes to its discovery file (`~/Library/Caches/TemporaryItems/avd/running/pid_<pid>.ini`, user-only).
     public static func arguments(for config: InstanceConfig, ports: InstancePorts, grpcPort: Int? = nil,
-                                 options: EngineLaunchOptions) -> [String] {
+                                 options: EngineLaunchOptions,
+                                 videoDecoder: VideoDecoderMode? = nil) -> [String] {
         var args = [
             "-avd", config.id.rawValue,
             "-no-window",                       // runs qemu-system-aarch64-headless: no Qt, no window
@@ -61,6 +62,7 @@ public enum EngineCommandLine {
         if !config.audioOutput { args.append("-no-audio") }
         if options.coldBoot { args.append("-no-snapshot-load") }
         if config.discardStateOnExit == true { args.append("-no-snapshot-save") }
+        args += videoDecoderArguments(videoDecoder ?? config.effectiveVideoDecoder())
         args += options.extraArguments
         var qemu = options.qemuArguments
         // The engine raises -memory below its floor (2048 MB on android-36.1); QEMU's own -m wins.
@@ -69,14 +71,30 @@ public enum EngineCommandLine {
         return args
     }
 
+    /// Engine flags for a (resolved) video decoder mode. `software` turns off the engine feature that registers the
+    /// guest's goldfish codecs (`androidboot.qemu.hwcodec.{avc,hevc,vpx}dec=2` on the kernel command line), so
+    /// Android falls back to its own `c2.android.*` decoders.
+    public static func videoDecoderArguments(_ mode: VideoDecoderMode) -> [String] {
+        mode.resolved == .software ? ["-feature", "-HardwareDecoder"] : []
+    }
+
+    /// Environment variable the engine reads when a host decoder is created (36.4.9: only the exact value "0"
+    /// turns VideoToolbox off, anything else or unset keeps it).
+    public static let vtbEnvironmentKey = "ANDROID_EMU_MEDIA_DECODER_VTB"
+
     /// Environment for the engine: Emuu's AVD home only. `ANDROID_SDK_ROOT` points at the SDK in use so the
-    /// engine never falls back to another SDK.
-    public static func environment(paths: EmuuPaths, sdk: AndroidSDK) -> [String: String] {
-        [
+    /// engine never falls back to another SDK. `videoDecoder` (resolved) sets the host decoder choice explicitly so
+    /// an inherited `ANDROID_EMU_MEDIA_DECODER_VTB` cannot change it.
+    public static func environment(paths: EmuuPaths, sdk: AndroidSDK, videoDecoder: VideoDecoderMode? = nil) -> [String: String] {
+        var env = [
             "ANDROID_AVD_HOME": paths.avdHome.path,
             "ANDROID_SDK_ROOT": sdk.root.path,
             "ANDROID_HOME": sdk.root.path,
         ]
+        if let mode = videoDecoder?.resolved {
+            env[vtbEnvironmentKey] = mode == .hostSoftware ? "0" : "1"
+        }
+        return env
     }
 
     /// Console port from an engine's argv (`-ports C,A` or `-port C`), for adopting running engines.

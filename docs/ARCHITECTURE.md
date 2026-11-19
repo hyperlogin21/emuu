@@ -390,6 +390,38 @@ Tools (all off by default) for "the window flickers / tears / shows black frames
   realistic decoder load), the test APK in `apk/` (`VideoActivity`: MediaPlayer in a SurfaceView or TextureView,
   full screen or in-feed, with animated UI over it; `GLActivity`: 60 fps GL pattern, `--ez upload true` for a
   per-frame texture upload) and `run-scenarios.sh` (plays each scenario and runs the probe).
+  `CodecActivity` drives MediaCodec the way a short-video feed player does (TikTok's TTVideoEngine, from the
+  user's logcat): asynchronous MediaCodec straight to a Surface, `KEY_PRIORITY` 0, `flush()` right after
+  `start()` (with the codec-specific data resubmitted), looping by `flush()` + seek on the same codec
+  (`loopAfter`), swipes that create the next codec while the previous one is released on another thread
+  (`swipe`, `async`), pre-warming on an off-screen surface then `setOutputSurface()` (`placeholder`,
+  `pingpong`), hidden concurrent decoders (`preload`) and decoding into the app's own GL pipeline (`out gl`:
+  SurfaceTexture + `samplerExternalOES`). Scenarios with an `EmuuCodec` log line per codec event.
+* **Green video** (a video area of solid ≈ (0, 135, 0) under intact UI) is a decoded frame whose YUV planes
+  were never written (Y = U = V = 0). It comes from the decode path, not Emuu's frame reading. The probe's
+  `green` check counts it when ≥ 25 % of the screen has that colour (G ≥ 60, R and B < 40). First check which
+  codec the guest uses (`c2.goldfish.*` = host decoding, `c2.android.*` = guest software) and switch with
+  `emuu video-decoder` (next section).
+
+### Video decoder setting (`InstanceConfig.videoDecoder`, `emuu video-decoder`)
+
+```
+ setting (instance JSON, nil = auto) ─┐                  ┌─ software:      -feature -HardwareDecoder → guest c2.android.*
+ EMUU_VIDEO_DECODER (overrides all) ──┼─ effective mode ─┼─ hardware:      engine default, c2.goldfish.* → host VideoToolbox
+                                      │   (auto→software) └─ host-software: c2.goldfish.* → host ffmpeg (ANDROID_EMU_MEDIA_DECODER_VTB=0)
+ <avd>/emuu-guest-codecs (host|guest) ┴─ EngineInstance.videoDecoderPlan → cold boot once if the snapshot's codecs differ
+```
+
+* The guest registers its codecs once, at boot, from the kernel command line
+  (`androidboot.qemu.hwcodec.{avc,hevc,vpx}dec=2` when the engine feature `HardwareDecoder` is on). A quick-boot
+  snapshot therefore keeps the codec set it was saved with, whatever the next launch passes. Every launch writes
+  the codec set to `<avd>/emuu-guest-codecs`; a snapshot without the file predates the setting and has host
+  codecs. When the snapshot's set differs from the wanted one, the launch adds `-no-snapshot-load` (one cold boot;
+  the next save matches). Farm clones never save, so they keep the golden's set instead and log that the golden
+  should be re-sealed. `hardware` ↔ `host-software` needs no cold boot (same guest codecs; the variable is read
+  when the host creates a decoder).
+* `EngineInstance` re-reads the stored setting at every launch, so a change from the app's picker (memory HUD) or
+  the CLI applies at the next start/resume without recreating the controller.
 
 
 ## Automation farm and self-healing (EmuuFarm, `emuu golden|clone|farm|run|health|heal|reboot`)

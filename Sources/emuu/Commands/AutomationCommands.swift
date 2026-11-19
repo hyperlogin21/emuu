@@ -292,3 +292,75 @@ struct Rotate: AsyncParsableCommand {
         await session.stop()
     }
 }
+
+// MARK: video decoder
+
+struct VideoDecoder: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "video-decoder",
+        abstract: "Show or set where guest video is decoded (saved per instance).",
+        discussion: """
+        auto           Emuu's default (currently \(VideoDecoderMode.resolvedDefault.rawValue)).
+        software       Android's own decoders inside the guest (c2.android.*). No host video path.
+        hardware       The engine's default: the guest's c2.goldfish.* codecs, decoded on the Mac with VideoToolbox.
+        host-software  Same host path without VideoToolbox (ffmpeg on the Mac); for comparisons.
+
+        The guest chooses its codecs when it boots, so switching between host (hardware, host-software) and guest \
+        (software) decoders takes effect at the next start, which cold-boots once. EMUU_VIDEO_DECODER=<mode> \
+        overrides every instance for one launch (quick tests). See docs/engine-findings.md, "Video decoding".
+
+          emuu video-decoder status phone
+          emuu video-decoder software phone
+          emuu video-decoder auto
+        """)
+
+    @Argument(help: "auto|software|hardware|host-software|status [instance]") var args: [String]
+    @OptionGroup var option: InstanceOption
+
+    static func parse(_ args: [String]) -> (instance: String?, mode: VideoDecoderMode?)? {
+        func value(_ s: String) -> VideoDecoderMode?? { s == "status" ? .some(nil) : VideoDecoderMode(argument: s).map { .some($0) } }
+        switch args.count {
+        case 1: return value(args[0]).map { (nil, $0) }
+        case 2:
+            if let m = value(args[0]) { return (args[1], m) }
+            if let m = value(args[1]) { return (args[0], m) }
+            return nil
+        default: return nil
+        }
+    }
+
+    func validate() throws {
+        guard Self.parse(args) != nil else {
+            throw ValidationError("usage: emuu video-decoder auto|software|hardware|host-software|status [<instance>]")
+        }
+    }
+
+    func run() async throws {
+        let ctx = try CLIContext.live()
+        let p = Self.parse(args)!
+        var config = try ctx.resolveInstance(p.instance ?? option.instance)
+        if let mode = p.mode {
+            config = try ctx.store.updatePreferences(config.id) { $0.videoDecoder = mode }
+        }
+        let setting = config.videoDecoder ?? .auto
+        let effective = config.effectiveVideoDecoder()
+        var line = "\(config.id): video decoder \(setting.rawValue)"
+        if setting == .auto || effective != setting { line += " → \(effective.rawValue)" }
+        if let env = ProcessInfo.processInfo.environment[VideoDecoderMode.environmentKey], !env.isEmpty {
+            line += " (\(VideoDecoderMode.environmentKey)=\(env))"
+        }
+        if ctx.store.isRunning(config.id) {
+            // What the running guest actually registered at boot (1 = no host codecs advertised).
+            if let client = try? await ctx.readyDevice(config, wake: false),
+               let r = try? await client.shell("getprop ro.boot.qemu.hwcodec.avcdec; getprop ro.boot.qemu.hwcodec.hevcdec", timeout: .seconds(10)) {
+                let values = r.trimmedStdout.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+                let host = values.contains("2")
+                line += " · running guest uses \(host ? "host (goldfish) decoders" : "guest software decoders")"
+                if host != effective.usesHostCodecs { line += "; the next start switches (one cold boot)" }
+            }
+        } else if p.mode != nil {
+            line += " (applies at the next start)"
+        }
+        Out.line(line)
+    }
+}

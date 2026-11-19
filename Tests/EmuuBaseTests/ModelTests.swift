@@ -152,6 +152,43 @@ import Testing
     }
 }
 
+@Suite struct VideoDecoderModeTests {
+    @Test func olderConfigsFollowTheDefault() throws {
+        // A config written before the setting existed has no "videoDecoder" key.
+        let config = InstanceConfig(id: InstanceID(rawValue: "old")!)
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(config)) as! [String: Any]
+        json.removeValue(forKey: "videoDecoder")
+        let decoded = try JSONDecoder().decode(InstanceConfig.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.videoDecoder == nil)
+        #expect(decoded.effectiveVideoDecoder(environment: [:]) == VideoDecoderMode.resolvedDefault)
+        #expect(VideoDecoderMode.resolvedDefault != .auto)
+    }
+
+    @Test func settingRoundTripsAndEnvironmentOverrides() throws {
+        var config = InstanceConfig(id: InstanceID(rawValue: "vd")!)
+        config.videoDecoder = .hardware
+        let back = try JSONDecoder().decode(InstanceConfig.self, from: JSONEncoder().encode(config))
+        #expect(back.videoDecoder == .hardware)
+        #expect(back.effectiveVideoDecoder(environment: [:]) == .hardware)
+        #expect(back.effectiveVideoDecoder(environment: ["EMUU_VIDEO_DECODER": "software"]) == .software)
+        #expect(back.effectiveVideoDecoder(environment: ["EMUU_VIDEO_DECODER": "auto"]) == VideoDecoderMode.resolvedDefault)
+        // Empty or unknown values are ignored.
+        #expect(back.effectiveVideoDecoder(environment: ["EMUU_VIDEO_DECODER": ""]) == .hardware)
+        #expect(back.effectiveVideoDecoder(environment: ["EMUU_VIDEO_DECODER": "bogus"]) == .hardware)
+    }
+
+    @Test func argumentsAndAliases() {
+        #expect(VideoDecoderMode(argument: "host-software") == .hostSoftware)
+        #expect(VideoDecoderMode(argument: "Hardware") == .hardware)
+        #expect(VideoDecoderMode(argument: "host") == .hardware)
+        #expect(VideoDecoderMode(argument: "guest") == .software)
+        #expect(VideoDecoderMode(argument: "nope") == nil)
+        #expect(VideoDecoderMode.software.usesHostCodecs == false)
+        #expect(VideoDecoderMode.hardware.usesHostCodecs && VideoDecoderMode.hostSoftware.usesHostCodecs)
+        #expect(VideoDecoderMode.auto.resolved == VideoDecoderMode.resolvedDefault)
+    }
+}
+
 @Suite struct MemoryModelTests {
     @Test func pressureOrdering() {
         #expect(MemoryPressureLevel.normal < .elevated)

@@ -109,6 +109,10 @@ struct MemoryHUDView: View {
             Toggle("Automation mode", isOn: Binding(get: { session.automationMode },
                                                     set: { on in Task { await session.setAutomationMode(on) } }))
                 .help("For tests and scripts over adb (adb -s \(session.client?.serial.rawValue ?? "<serial>")): never freeze or hibernate this instance; only background apps are trimmed. Saved per instance; same as `emuu automation on|off`.")
+            Picker("Video decoder", selection: Binding(get: { session.videoDecoder }, set: { session.setVideoDecoder($0) })) {
+                ForEach(VideoDecoderMode.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .help("Where video in the guest is decoded. Software (Android's own decoders, the default) avoids the host decoder path; Hardware uses the Mac's VideoToolbox. Applies at the next start (one cold boot when switching). Same as `emuu video-decoder`.")
             Toggle("Freeze when hidden", isOn: $settings.autoFreezeWhenHidden)
                 .disabled(session.automationMode)
                 .onChange(of: settings.autoFreezeWhenHidden) { model.settingsChanged() }

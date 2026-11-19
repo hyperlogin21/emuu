@@ -169,10 +169,22 @@ public actor EngineInstance: EngineControl {
         Self.rotateLogIfLarge(logURL)
         let grpc = options.grpc ? PortAllocator.grpcPort(for: chosen, isFree: deps.isPortFree) : nil
         if options.grpc, grpc == nil { log.warning("no free gRPC port in 8554…8999: the display needs one (engine starts without it)") }
-        let args = EngineCommandLine.arguments(for: config, ports: chosen, grpcPort: grpc, options: options)
-        Self.appendLogHeader(logURL, "emuu launch \(ISO8601DateFormatter().string(from: deps.clock.now())): emulator \(args.joined(separator: " "))")
+        // The stored setting may have changed since this controller was created (app picker, `emuu video-decoder`).
+        var latest = config
+        if let stored = try? InstanceStore.decode(paths.instanceConfigFile(for: instanceID)) { latest.videoDecoder = stored.videoDecoder }
+        let plan = Self.videoDecoderPlan(desired: latest.effectiveVideoDecoder(),
+                                         snapshotCodecs: Self.readGuestCodecsMarker(avdDir),
+                                         hasQuickBootSnapshot: Self.hasQuickBootSnapshot(snapshotsDirectory),
+                                         coldBoot: options.coldBoot, isClone: config.goldenSource != nil)
+        if let note = plan.note { log.notice("\(note)") }
+        var launchOptions = options
+        launchOptions.coldBoot = plan.coldBoot
+        let args = EngineCommandLine.arguments(for: config, ports: chosen, grpcPort: grpc, options: launchOptions,
+                                               videoDecoder: plan.mode)
+        Self.writeGuestCodecsMarker(avdDir, plan.mode.usesHostCodecs ? .host : .guest)
+        Self.appendLogHeader(logURL, "emuu launch \(ISO8601DateFormatter().string(from: deps.clock.now())): emulator \(args.joined(separator: " ")) [video decoder: \(plan.mode.rawValue)]")
         let request = ProcessRequest(executable: sdk.emulator, arguments: args,
-                                     environment: EngineCommandLine.environment(paths: paths, sdk: sdk),
+                                     environment: EngineCommandLine.environment(paths: paths, sdk: sdk, videoDecoder: plan.mode),
                                      workingDirectory: paths.root, stdout: .file(logURL), stderr: .file(logURL))
         let launchedAt = deps.clock.now()
         let launchLogOffset = Self.fileSize(logURL)
@@ -340,6 +352,50 @@ public actor EngineInstance: EngineControl {
     public func listSnapshots() async throws -> [String] {
         if current == .running, let names = try? await consoleClient().snapshotList() { return names }
         return Self.snapshotsOnDisk(snapshotsDirectory)
+    }
+
+    // MARK: video decoder vs. quick-boot snapshot
+
+    /// Which codec set the guest registered at boot: the host-backed goldfish codecs or Android's software codecs.
+    public enum GuestCodecs: String, Sendable { case host, guest }
+
+    /// File in the AVD directory recording the guest codec set of the last launch (and so of any snapshot it saved).
+    /// Clones copy it with the golden's snapshot.
+    static let guestCodecsMarkerName = "emuu-guest-codecs"
+
+    static func readGuestCodecsMarker(_ avdDir: URL) -> GuestCodecs? {
+        (try? String(contentsOf: avdDir.appendingPathComponent(guestCodecsMarkerName), encoding: .utf8))
+            .flatMap { GuestCodecs(rawValue: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
+    static func writeGuestCodecsMarker(_ avdDir: URL, _ codecs: GuestCodecs) {
+        try? Data("\(codecs.rawValue)\n".utf8).write(to: avdDir.appendingPathComponent(guestCodecsMarkerName), options: .atomic)
+    }
+
+    static func hasQuickBootSnapshot(_ snapshots: URL) -> Bool {
+        FileManager.default.fileExists(atPath: snapshots.appendingPathComponent("default_boot/snapshot.pb").path)
+    }
+
+    /// Decides the decoder mode and whether to cold-boot. The guest picks its codecs from the kernel command line at
+    /// boot, so a quick-boot snapshot keeps the codec set it was saved with whatever flags the next launch passes.
+    /// A snapshot with no marker predates the setting and was taken with the engine default (host codecs).
+    /// * snapshot matches (or none, or cold boot requested) → `desired` as asked;
+    /// * mismatch on an ordinary instance → cold boot once with `desired` (the next snapshot then matches);
+    /// * mismatch on a farm clone → keep the golden snapshot's codec set (a clone never saves, so a cold boot would
+    ///   repeat on every start); re-seal the golden to change it.
+    static func videoDecoderPlan(desired: VideoDecoderMode, snapshotCodecs: GuestCodecs?, hasQuickBootSnapshot: Bool,
+                                 coldBoot: Bool, isClone: Bool) -> (mode: VideoDecoderMode, coldBoot: Bool, note: String?) {
+        let desired = desired.resolved
+        guard hasQuickBootSnapshot, !coldBoot else { return (desired, coldBoot, nil) }
+        let recorded = snapshotCodecs ?? .host
+        guard (recorded == .host) != desired.usesHostCodecs else { return (desired, false, nil) }
+        if isClone {
+            let kept: VideoDecoderMode = recorded == .host ? .hardware : .software
+            return (kept, false, "video decoder \(desired.rawValue) requested, but the golden snapshot was saved with "
+                    + "\(recorded == .host ? "host" : "guest software") decoders; keeping \(kept.rawValue) (re-seal the golden to change it)")
+        }
+        return (desired, true, "video decoder \(desired.rawValue): the quick-boot snapshot was saved with "
+                + "\(recorded == .host ? "host" : "guest software") decoders; cold boot")
     }
 
     var snapshotsDirectory: URL { paths.avdDirectory(for: instanceID).appendingPathComponent("snapshots", isDirectory: true) }

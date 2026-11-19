@@ -88,9 +88,9 @@ With exactly one instance you can leave out the name. Otherwise use `-i <name>`,
 | Command | What it does |
 | --- | --- |
 | `doctor` | Host, SDK, engine, Play Store image and adb checks, with fix commands (`--json`). |
-| `create <name>` | New instance. `--preset standard\|lite\|gaming`; overrides: `--ram`, `--cores`, `--screen 1080x2400@420`, `--gpu`, `--no-audio`, `--port` (console port 5554–5584: adb only finds emulators there), `--profile`. |
+| `create <name>` | New instance. `--preset standard\|lite\|gaming`; overrides: `--ram`, `--cores`, `--screen 1080x2400@420`, `--gpu`, `--no-audio`, `--port` (console port 5554–5584: adb only finds emulators there), `--profile`, `--video-decoder`. |
 | `list`, `delete <name>` | List instances; delete one with all its data (`-y` to skip the prompt). |
-| `start` | Boot and supervise. `--headless` (default) or `--window`; `--detach`; `--profile lite\|balanced\|performance`; `--cold-boot`; `--no-governor`; `--idle-freeze <min>`; `--automation`. |
+| `start` | Boot and supervise. `--headless` (default) or `--window`; `--detach`; `--profile lite\|balanced\|performance`; `--cold-boot`; `--no-governor`; `--idle-freeze <min>`; `--automation`; `--video-decoder <mode>` (saved). |
 | `stop`, `freeze`, `thaw`, `hibernate`, `resume` | Lifecycle. These go through the supervisor when one runs. `stop --no-snapshot` cold-boots next time; `stop --force` sends SIGKILL. |
 | `status` | State, pids and a memory line (`--all`, `--json`). |
 | `install <paths…>` | `.apk`, split sets (a directory with `base.apk` + `split_*.apk`, or `--split`), `.xapk` with OBB, `.apks`, `.apkm`. |
@@ -101,6 +101,7 @@ With exactly one instance you can leave out the name. Otherwise use `-i <name>`,
 | `rotate [<name>] [portrait\|landscape\|left\|right]` | Turns the device (its orientation sensors); no argument toggles portrait ↔ landscape. |
 | `keyboard on\|off\|status [<name>]` | Android's on-screen keyboard (saved per instance; same as the app's Keyboard button). |
 | `automation on\|off\|status [<name>]` | Automation mode for tests/scripts over adb (see [adb and automation](#adb-and-automation)). |
+| `video-decoder auto\|software\|hardware\|host-software\|status [<name>]` | Where guest video is decoded (saved per instance; see [Video decoding](#video-decoding)). |
 | `shell [-- cmd…]` | `adb shell` on the instance (interactive without a command). |
 | `logs` | Engine log (default), `--supervisor`, `--app`, or `--samples` (the governor's CSV); `-f` follows. |
 | `mem` | Live governor view (`--json`, `--once`, `--apps` for a per-app breakdown). `mem trim [--kill] [--level …]`, `mem reclaim`. |
@@ -498,6 +499,26 @@ some of them out or ask to verify the device). This was **not tested with a real
 checked with an installed app, changed settings, a file in shared storage and the Android ID, all of which came
 across unchanged.
 
+## Video decoding
+
+Each instance has a video decoder setting (`emuu video-decoder`, `create/start --video-decoder`, or the app's
+memory panel):
+
+| Mode | What decodes video | Notes |
+| --- | --- | --- |
+| `auto` (default) | currently `software` | Existing instances follow it without being recreated. |
+| `software` | Android's own decoders inside the guest (`c2.android.*`) | Quick-boot snapshots stay loadable after video; ≈ 20–30 % of one core and ≈ 80 MB more than `hardware` per 1080p30 stream while playing. Very high-bitrate HEVC 1080p60 drops frames. |
+| `hardware` | the Mac's VideoToolbox, via the guest's `c2.goldfish.*` codecs (the engine's default) | Cheapest for heavy 1080p60. **A quick-boot snapshot saved after any video was played cannot be loaded** (hibernate/resume cold-boots, the engine may hang or crash). |
+| `host-software` | ffmpeg on the Mac, same guest codecs as `hardware` | For comparisons only. |
+
+The guest picks its codecs when it boots, so switching between host and guest decoders cold-boots once at the next
+start (the app's RAM state is lost; data on the device is kept). `EMUU_VIDEO_DECODER=<mode>` overrides every
+instance for one command or app launch. Farm clones keep the codecs of their golden's snapshot; re-seal a golden
+to change them. Measurements: docs/engine-findings.md, "Video decoding".
+
+**Green video area (e.g. TikTok)?** `emuu video-decoder status <name>` shows which decoders the running guest
+uses. With host decoders, switch: `emuu video-decoder software <name>`, then stop and start the instance.
+
 ## Play Store sign-in
 
 Sign in **on the device**, the same way as on a phone: `emuu playstore --sign-in` opens the Google account
@@ -510,6 +531,7 @@ its prompts. `emuu playstore --status-only` shows whether an account is signed i
 ```
 ~/.emuu/avd/                 instances (ANDROID_AVD_HOME for the engine)
 ~/.emuu/instances/<id>.json  instance settings
+~/.emuu/avd/<id>.avd/emuu-guest-codecs  host|guest: decoders of the last launch (and its quick-boot snapshot)
 ~/.emuu/run/                 pid files, supervisor status JSON, control sockets, locks
 ~/.emuu/logs/                emuu.log, engine-<id>.log, supervisor-<id>.log, memory-<id>.csv
 ~/.emuu/cache/               temporary install extraction (an old cache/scrcpy/ from earlier versions can be deleted)

@@ -103,6 +103,47 @@ public enum GPUMode: String, Codable, Sendable, Hashable, CaseIterable {
     case guest
 }
 
+/// Where guest video (H.264/HEVC/VP8/VP9) is decoded. See docs/engine-findings.md ("Video decoding").
+public enum VideoDecoderMode: String, Codable, Sendable, Hashable, CaseIterable {
+    /// Emuu's measured default (`resolvedDefault`).
+    case auto
+    /// The engine's default: the guest's `c2.goldfish.*` codecs hand the stream to the host, which decodes with
+    /// VideoToolbox into host colour buffers (ffmpeg/libvpx for what VideoToolbox does not take).
+    case hardware
+    /// Host decoding without VideoToolbox (`ANDROID_EMU_MEDIA_DECODER_VTB=0`: ffmpeg on the host). Same guest
+    /// codecs and shared-memory device as `hardware`; for comparisons only.
+    case hostSoftware = "host-software"
+    /// Android's own software codecs (`c2.android.*`) inside the guest (`-feature -HardwareDecoder`): the host
+    /// video path (goldfish codecs, address-space device, host colour buffers for YUV) is not used at all.
+    case software
+
+    /// What `auto` means. Chosen from the 2026-11-19 measurements: with host decoding, any quick-boot snapshot
+    /// saved after a video was played cannot be loaded again (the engine cold-boots, sometimes after a hang and a
+    /// crash), and host decoding is the path behind the reported green video area; the guest's software decoders
+    /// played every test stream up to 1080p60 without either problem.
+    public static let resolvedDefault: VideoDecoderMode = .software
+
+    /// `EMUU_VIDEO_DECODER` (auto, hardware, host-software, software) overrides every instance's setting, for quick tests.
+    public static let environmentKey = "EMUU_VIDEO_DECODER"
+
+    /// `auto` resolved; never returns `.auto`.
+    public var resolved: VideoDecoderMode { self == .auto ? Self.resolvedDefault : self }
+
+    /// True when the guest's goldfish (host-backed) codecs are registered. This is fixed when the guest boots
+    /// (kernel command line), so a quick-boot snapshot taken with the other value must not be loaded.
+    public var usesHostCodecs: Bool { resolved != .software }
+
+    /// Accepts the raw values plus `host` (= hardware) and `guest` (= software).
+    public init?(argument: String) {
+        switch argument.lowercased() {
+        case "host", "vtb", "videotoolbox": self = .hardware
+        case "guest": self = .software
+        case "host_software", "hostsoftware", "ffmpeg": self = .hostSoftware
+        default: self.init(rawValue: argument.lowercased())
+        }
+    }
+}
+
 /// How aggressively the governor and AVD tuning favour memory savings over responsiveness.
 /// The thresholds per profile are defined by `EmuuMemory`; this enum is only the user-facing choice.
 public enum MemoryProfile: String, Codable, Sendable, Hashable, CaseIterable {
@@ -223,6 +264,9 @@ public struct InstanceConfig: Codable, Sendable, Hashable {
     /// Quick-boot snapshot is never saved on exit (`-no-snapshot-save`): farm clones always resume from the golden
     /// state. nil = off.
     public var discardStateOnExit: Bool?
+    /// Where guest video is decoded. nil (older configs) = `.auto`, so existing instances follow Emuu's default
+    /// without being recreated (the first start after a change cold-boots once; see `EngineInstance`).
+    public var videoDecoder: VideoDecoderMode?
 
     /// `automationMode` with its default applied.
     public var isAutomationMode: Bool { automationMode ?? false }
@@ -232,6 +276,15 @@ public struct InstanceConfig: Codable, Sendable, Hashable {
     public var isGuestRAMEnforced: Bool { guestRAMEnforced ?? false }
     /// `selfHeal` with its default applied.
     public var isSelfHealing: Bool { selfHeal ?? false }
+
+    /// The decoder this instance runs with: `EMUU_VIDEO_DECODER` if set and valid, else `videoDecoder`, else
+    /// `auto`; always resolved (never `.auto`).
+    public func effectiveVideoDecoder(environment: [String: String] = ProcessInfo.processInfo.environment) -> VideoDecoderMode {
+        if let raw = environment[VideoDecoderMode.environmentKey], !raw.isEmpty, let mode = VideoDecoderMode(argument: raw) {
+            return mode.resolved
+        }
+        return (videoDecoder ?? .auto).resolved
+    }
 
     public init(
         id: InstanceID,

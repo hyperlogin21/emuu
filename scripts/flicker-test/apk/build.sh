@@ -1,5 +1,6 @@
 #!/bin/bash
-# Builds emuu-flickertest.apk (VideoActivity: MediaPlayer in SurfaceView/TextureView with UI on top;
+# Builds emuu-flickertest.apk (VideoActivity: MediaPlayer in SurfaceView/TextureView with UI on top; CodecActivity:
+# MediaCodec driven like a short-video feed player (async, flush loops, swipes, setOutputSurface, preload, own GL);
 # GLActivity: 60 fps GL pattern) with the SDK's build-tools. Output: $OUT (default ./build/emuu-flickertest.apk).
 set -euo pipefail
 cd "$(dirname "$0")"

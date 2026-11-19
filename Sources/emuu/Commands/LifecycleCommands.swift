@@ -84,6 +84,9 @@ struct Start: AsyncParsableCommand {
     @Option(help: "Seconds to wait for Android to finish booting.")
     var bootTimeout: Int = 600
 
+    @Option(help: "Video decoder (saved for the instance): auto, hardware, software or host-software. A change from host to guest decoders or back cold-boots once.")
+    var videoDecoder: VideoDecoderMode?
+
     @Flag(help: "Self-healing: periodic health checks, automatic recovery of a hung or dead engine (saved for the instance).")
     var selfHeal = false
 
@@ -132,6 +135,9 @@ struct Start: AsyncParsableCommand {
         }
         if selfHeal && !config.isSelfHealing && !superviseChild {
             config = try ctx.store.updatePreferences(config.id) { $0.selfHeal = true }
+        }
+        if let videoDecoder, videoDecoder != config.videoDecoder, !superviseChild {
+            config = try ctx.store.updatePreferences(config.id) { $0.videoDecoder = videoDecoder }
         }
         if let live = registry.liveSupervisor(for: config.id) {
             let state = live.status?.engineState ?? "unknown"
