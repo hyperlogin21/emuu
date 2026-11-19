@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import CoreGraphics
+import EmuuBase
 @testable import EmuuApp
 
 @Suite struct SingleInstancePolicyTests {
@@ -72,5 +73,16 @@ import CoreGraphics
         let landscape = InstanceWindowGeometry.idealContentSize(aspect: CGSize(width: 1600, height: 720), visible: CGSize(width: 1000, height: 875))
         #expect(landscape.width <= 800 + 1)
         #expect(abs((landscape.width - InstanceWindowGeometry.stripWidth) / landscape.height - 1600.0 / 720.0) < 0.02)
+    }
+}
+
+@Suite struct AndroidVersionChoicesTests {
+    @Test func installableExcludesInstalledAndTitlesMarkDefault() {
+        let v35 = SystemImageRef.playStore(AndroidVersion(major: 35))
+        let c = AndroidVersionChoices(installed: [.playStoreDefault, v35], defaultImage: .playStoreDefault)
+        #expect(c.installable.map(\.version.number) == ["36", "34"])
+        #expect(c.installable.first?.command == "emuu images install 36")
+        #expect(AndroidVersionChoices.title(.playStoreDefault, isDefault: true) == "Android 16 QPR2 (API 36.1) — default")
+        #expect(AndroidVersionChoices.title(v35, isDefault: false) == "Android 15 (API 35)")
     }
 }

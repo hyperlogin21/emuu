@@ -158,6 +158,7 @@ struct InstanceRowView: View {
     private var subtitle: String {
         var parts = ["\(row.config.ramMB) MB", "\(row.config.cores) cores",
                      "\(row.config.display.width)×\(row.config.display.height)",
+                     row.config.systemImage.androidVersion?.marketingName ?? row.config.systemImage.apiDirectory,
                      row.config.systemImage.hasPlayStore ? "Google Play" : row.config.systemImage.tag]
         if let owner = row.otherOwner {
             parts.append(owner.ownerKind == .cli ? "attached by CLI" : "attached by another app")
@@ -211,6 +212,7 @@ struct CreateInstanceSheet: View {
 
     @State private var name = "Pixel"
     @State private var preset: InstancePreset = .standard
+    @State private var image: SystemImageRef?
     @State private var creating = false
     @State private var error: String?
 
@@ -231,6 +233,7 @@ struct CreateInstanceSheet: View {
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
+            androidVersionSection
             if let advice = model.playStoreAdvice {
                 Text(advice).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
             }
@@ -255,13 +258,36 @@ struct CreateInstanceSheet: View {
         error = nil
         Task {
             do {
-                let id = try await model.createInstance(name: name, preset: preset)
+                let id = try await model.createInstance(name: name, preset: preset, image: image)
                 dismiss()
                 onCreated(id)
             } catch {
                 self.error = (error as? LocalizedError)?.errorDescription ?? "\(error)"
             }
             creating = false
+        }
+    }
+
+    /// Installed Android versions; others get the Terminal command that installs them (downloads are 1.5–2 GB and
+    /// need Google's licence accepted, which stays in `emuu images install`).
+    @ViewBuilder private var androidVersionSection: some View {
+        let choices = model.androidVersionChoices
+        if !choices.installed.isEmpty {
+            Text("Android version").font(.headline)
+            Picker("Android version", selection: Binding(get: { image ?? choices.defaultImage ?? choices.installed[0] },
+                                                         set: { image = $0 })) {
+                ForEach(choices.installed, id: \.self) { ref in
+                    Text(AndroidVersionChoices.title(ref, isDefault: ref == choices.defaultImage)).tag(ref)
+                }
+            }
+            .labelsHidden()
+            Text("Fixed for the life of the instance (its data belongs to that version).")
+                .font(.caption).foregroundStyle(.secondary)
+            if !choices.installable.isEmpty {
+                Text("Install another version in Terminal, then reopen this sheet: "
+                     + choices.installable.map { "\($0.version.marketingName): `\($0.command)`" }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
         }
     }
 

@@ -157,6 +157,17 @@ public actor EngineInstance: EngineControl {
               FileManager.default.fileExists(atPath: paths.avdIniFile(for: instanceID).path) else {
             throw EmuuError.instanceNotFound(instanceID)
         }
+        // An instance keeps the Android version it was created with; if that image was removed from the SDK the
+        // engine would fail with an obscure message, so say which image to put back.
+        if FileManager.default.fileExists(atPath: sdk.systemImagesDirectory.path) {
+            let imageDir = sdk.directory(for: config.systemImage)
+            if !FileManager.default.fileExists(atPath: imageDir.appendingPathComponent("system.img").path),
+               !FileManager.default.fileExists(atPath: imageDir.appendingPathComponent("system").path) {
+                let how = config.systemImage.androidVersion.map { "`emuu images install \($0.number)`" }
+                    ?? "`\(sdk.sdkManagerPath) \"\(config.systemImage.sdkManagerPackage)\"`"
+                throw EmuuError.systemImageMissing(path: "\(imageDir.path) (\(instanceID) runs \(config.systemImage.androidLabel); reinstall it with \(how))")
+            }
+        }
         guard !deps.isAVDLocked(avdDir) else {
             throw EmuuError.engine("\(instanceID) is locked by an engine Emuu cannot see (another AVD home or user?)")
         }

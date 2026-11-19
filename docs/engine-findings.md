@@ -382,6 +382,42 @@ Measured with a test app that logs key events and its text (scripts/typing-test-
   (`emuu run` forwarding). `POSIX_SPAWN_SETSIGMASK` with an empty mask (plus `SETSIGDEF` for the signals Emuu
   ignores while forwarding) fixed it; unit test `forwardedSignalReachesTheCommand`.
 
+## Android versions (measured 2026-11-19, engine 36.4.9, isolated EMUU_HOME)
+
+`sdkmanager --list` (cmdline-tools `latest`) offers these Google Play arm64 images: android-33, 34, 35, 36, 36.1,
+37.0, plus `-extNN` variants (33-ext4/5, 34-ext8…12, 35-ext14/15, 36-ext18/19), `_ps16k` variants (35, 36, 36.1, 37.0;
+37.1 and 37.2 exist **only** as `_ps16k`), and tablet/automotive/XR images. android-36 and android-36.1 are distinct
+packages (`arm64-v8a-36_r07.zip` vs `arm64-v8a-36.1_r04.zip`). Approximate downloads (repository XML): 34 ≈ 1.5 GB,
+35 ≈ 1.8 GB, 36 ≈ 1.9 GB, 36.1 ≈ 2.0 GB.
+
+**android-35 (`system-images;android-35;google_apis_playstore;arm64-v8a`, r9), smoke test:**
+
+* `emuu images install 35` (stdin not a terminal, no `--accept-licenses`): installed in 23 s because the SDK's
+  licence was already accepted on this Mac; 2.16 GiB on disk.
+* `emuu create a35 --android 35` → config.ini `image.sysdir.1 = system-images/android-35/…`, `target = android-35`.
+* Cold boot to `emuu start --detach` returning: 15 s. `ro.build.version.sdk` = 35, release 15, Play Store
+  (`com.android.vending` 41.3.25 at first boot, updated itself to 54.2.12) present, not signed in. Idle after boot:
+  guest 1.13 / 1.93 GiB used, engine footprint 3.92 GiB as `emuu status` reports it (same order as 36.1).
+* Display: `emuu debug display-probe` streamed frames over MMAP with 0 artefacts; `emuu screenshot` correct
+  (720x1600, and 1600x720 in landscape). App self-test (`EMUU_APP_SELFTEST=cycle:a35:1`): streaming after 1.4 s,
+  Home key, screenshot, Play Store detected, volume up/down, keyboard toggle + typing, 10 s recording, hide/show,
+  input→frame latency median 17 ms all passed as on 36.1.
+* Rotation via `emuu rotate`: Settings follows (ROTATION_90, frames 1600x720 landscape), the home screen stays
+  portrait (shown sideways), back to portrait OK.
+* Video decoder `auto` → software: `-feature -HardwareDecoder`, `ro.boot.qemu.hwcodec.*` unset.
+* `emuu hibernate` 2.2 s (engine exits), `emuu resume` 2.1 s, same guest boot id, a file in /data/local/tmp kept;
+  "Successfully loaded snapshot 'default_boot' using 654 ms".
+* `emuu clone-instance a35 a35c --stop-source`: 2.6 s; the clone resumed the snapshot in 1.6 s (477 ms load), API 35,
+  the marker file present. `emuu images remove 35` was refused while `a35` existed.
+* **Not version-specific, found on the way:** the app's own Rotate (self-test step "rotate step 2") fails on both 35
+  and 36.1 on this branch: the in-session `setPhysicalModel` call ends with `CANCELLED` or `DEADLINE_EXCEEDED`
+  after 10 s, Android still turns to ROTATION_90, but the window keeps receiving frames labelled 720x1600 portrait
+  whose pixels are a landscape picture (saved frame shows diagonal garbage); the window does not resize. The CLI's
+  `emuu rotate` (own gRPC connection) works on both. Earlier evidence on 36.1 shows the app rotation working, so this
+  is a regression on the combined branch, not an Android-version issue. Not fixed here (out of scope).
+* Not run on 35: Google sign-in, the farm (`golden create --android 35` + pool), the governor's guest tiers under
+  pressure, long sessions.
+
 ## Unverified / open
 
 * The `lite` preset (1536 MB, 2 vCPUs) has not been booted. Only `standard` (2048/4) was measured.

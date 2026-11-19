@@ -244,7 +244,13 @@ final class AppModel {
         Task { await finish(id, choice) }
     }
 
-    func createInstance(name: String, preset: InstancePreset) async throws -> InstanceID {
+    /// Android versions the create sheet offers (installed Google Play arm64 images, newest first) and the default.
+    var androidVersionChoices: AndroidVersionChoices {
+        guard let env else { return AndroidVersionChoices(installed: [], defaultImage: nil) }
+        return AndroidVersionChoices(installed: env.playStoreImages.map(\.ref), defaultImage: env.preferredImage?.ref)
+    }
+
+    func createInstance(name: String, preset: InstancePreset, image: SystemImageRef? = nil) async throws -> InstanceID {
         guard let env else { throw EmuuError.sdkNotFound(searched: []) }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let id = InstanceID.sanitized(from: trimmed.isEmpty ? "android" : trimmed) else {
@@ -256,7 +262,7 @@ final class AppModel {
             unique = next
             n += 1
         }
-        try env.createInstance(id: unique, preset: preset, displayName: trimmed.isEmpty ? nil : trimmed)
+        try env.createInstance(id: unique, preset: preset, displayName: trimmed.isEmpty ? nil : trimmed, image: image)
         await reload()
         return unique
     }
@@ -301,5 +307,27 @@ final class AppModel {
     /// Applies changed settings to every governed session.
     func settingsChanged() {
         Task { for s in sessions.values { await s.applySettings() } }
+    }
+}
+
+/// What the create sheet's Android version picker shows (pure; unit-tested).
+struct AndroidVersionChoices: Equatable {
+    var installed: [SystemImageRef]
+    var defaultImage: SystemImageRef?
+
+    /// Supported versions that are not installed, with the command that installs each.
+    var installable: [(version: AndroidVersion, command: String)] {
+        SystemImageCatalog.supported
+            .filter { e in !installed.contains { $0.androidVersion == e.version } }
+            .sorted { $0.version > $1.version }
+            .map { ($0.version, "emuu images install \($0.version.number)") }
+    }
+
+    static func title(_ ref: SystemImageRef, isDefault: Bool) -> String {
+        ref.androidLabel + (isDefault ? " — default" : "")
+    }
+
+    static func == (a: AndroidVersionChoices, b: AndroidVersionChoices) -> Bool {
+        a.installed == b.installed && a.defaultImage == b.defaultImage
     }
 }

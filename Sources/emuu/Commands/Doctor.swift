@@ -45,6 +45,21 @@ struct DoctorFacts: Sendable {
     var freeDiskBytes: UInt64? = nil
     var farmCapacity: CapacityReport? = nil
     var farmCost: DeviceCost? = nil
+    /// One entry per installed Google Play arm64 image (Android version).
+    var images: [ImageFact] = []
+
+    struct ImageFact: Sendable, Hashable {
+        var version: AndroidVersion
+        var package: String
+        var supported: Bool
+        var isDefault: Bool
+        /// Files the engine needs that are missing from the image directory.
+        var missingFiles: [String]
+        var instances: [String]
+    }
+
+    /// Files every Google Play arm64 image has that the engine loads at boot.
+    static let requiredImageFiles = ["system.img", "vendor.img", "ramdisk.img", "kernel-ranchu", "source.properties"]
 
     static let minimumEmulator = [35, 0, 0]
 
@@ -98,13 +113,19 @@ struct DoctorFacts: Sendable {
         }
 
         if !playStoreImages.isEmpty {
-            out.append(DoctorCheck(name: "Play Store image", level: .ok, detail: playStoreImages.joined(separator: ", ")))
+            let def = images.first(where: \.isDefault)
+            var detail = playStoreImages.joined(separator: ", ")
+            if let def, def.version != SystemImageCatalog.defaultVersion {
+                detail += "; new instances get \(def.version.label) (the usual default, API \(SystemImageCatalog.defaultVersion.number), is not installed)"
+            }
+            out.append(DoctorCheck(name: "Play Store image", level: .ok, detail: detail))
         } else {
             out.append(DoctorCheck(name: "Play Store image", level: otherARMImages.isEmpty ? .fail : .warn,
                                    detail: otherARMImages.isEmpty ? "no arm64 system image installed"
                                        : "only images without Play Store: \(otherARMImages.joined(separator: ", "))",
-                                   fix: "\(sdkManagerPath) \"\(SystemImageRef.playStoreDefault.sdkManagerPackage)\""))
+                                   fix: "emuu images install \(SystemImageCatalog.defaultVersion.number)   (or: \(sdkManagerPath) \"\(SystemImageRef.playStoreDefault.sdkManagerPackage)\")"))
         }
+        out += imageChecks()
 
         if let adbPath {
             if let version = adbServerVersion {
@@ -117,6 +138,22 @@ struct DoctorFacts: Sendable {
             out.append(DoctorCheck(name: "adb", level: .fail, detail: "not found", fix: "\(sdkManagerPath) \"platform-tools\""))
         }
         return out + tail()
+    }
+
+    /// One check per installed Android version (pure; unit-tested). A damaged image fails only when an instance uses it.
+    func imageChecks() -> [DoctorCheck] {
+        images.map { img in
+            let name = "\(img.version.label)"
+            let users = img.instances.isEmpty ? "no instances" : "instances: \(img.instances.joined(separator: ", "))"
+            if !img.missingFiles.isEmpty {
+                return DoctorCheck(name: name, level: img.instances.isEmpty ? .warn : .fail,
+                                   detail: "image incomplete, missing \(img.missingFiles.joined(separator: ", ")) (\(users))",
+                                   fix: "\(sdkManagerPath) --uninstall \"\(img.package)\" && emuu images install \(img.version.number)")
+            }
+            var detail = (img.isDefault ? "default for new instances; " : "") + users
+            if !img.supported { detail += "; not a version Emuu supports (\(SystemImageCatalog.supported.map(\.version.number).joined(separator: ", ")))" }
+            return DoctorCheck(name: name, level: img.supported ? .ok : .warn, detail: detail)
+        }
     }
 
     private func tail() -> [DoctorCheck] {
@@ -157,7 +194,7 @@ struct DoctorFacts: Sendable {
 }
 
 struct Doctor: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Check the host, Android SDK, engine, Play Store image and adb.")
+    static let configuration = CommandConfiguration(abstract: "Check the host, Android SDK, engine, installed Android versions and adb.")
 
     @Flag(help: "JSON output.") var json = false
 
@@ -218,6 +255,17 @@ struct Doctor: AsyncParsableCommand {
             let images = SDKLocator.installedImages(in: sdk).filter { $0.ref.abi == "arm64-v8a" }
             facts.playStoreImages = images.filter(\.hasPlayStore).map(\.description)
             facts.otherARMImages = images.filter { !$0.hasPlayStore }.map(\.description)
+            let configsForImages = (try? EngineEnvironment(paths: paths, sdk: sdk))?.store.list() ?? []
+            let defaultRef = SystemImageCatalog.defaultImage(installed: SDKLocator.installedImages(in: sdk))?.ref
+            facts.images = SystemImageCatalog.installed(in: sdk).compactMap { img in
+                guard let v = img.ref.androidVersion else { return nil }
+                let missing = DoctorFacts.requiredImageFiles.filter {
+                    !FileManager.default.fileExists(atPath: img.directory.appendingPathComponent($0).path)
+                }
+                return DoctorFacts.ImageFact(version: v, package: img.ref.sdkManagerPackage, supported: SystemImageCatalog.entry(for: v) != nil,
+                                             isDefault: img.ref == defaultRef, missingFiles: missing,
+                                             instances: SystemImageCatalog.users(of: img.ref, in: configsForImages).map(\.rawValue))
+            }
             if let env = try? EngineEnvironment(paths: paths, sdk: sdk) {
                 let configs = env.store.list()
                 facts.instanceCount = configs.count

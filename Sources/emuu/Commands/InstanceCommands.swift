@@ -23,6 +23,7 @@ struct Create: AsyncParsableCommand {
         discussion: """
         Presets: standard = 2048 MB / 4 cores / balanced governor; lite = 1536 MB / 2 cores / lite governor; \
         gaming = 3072 MB / 4 cores / performance governor. Overrides below apply on top of the preset.
+        The Android version (--android) is fixed for the instance's lifetime; `emuu images list` shows what is installed.
         """)
 
     @Argument(help: "Instance name (letters, digits, '.', '_', '-').")
@@ -33,6 +34,9 @@ struct Create: AsyncParsableCommand {
 
     @Option(help: "Display name.")
     var displayName: String?
+
+    @Option(help: "Android version (API level), e.g. 35, 34, 36.1. Default: \(SystemImageCatalog.defaultVersion.number) when installed. Must be installed (`emuu images install <version>`); cannot be changed later.")
+    var android: String?
 
     @Option(help: "Guest RAM in MB (1024-8192).")
     var ram: Int?
@@ -91,17 +95,23 @@ struct Create: AsyncParsableCommand {
     func run() async throws {
         let ctx = try CLIContext.live()
         guard let id = InstanceID(rawValue: name) else { throw CLIError(describe(EmuuError.invalidInstanceID(name))) }
-        guard let image = ctx.engines.preferredImage else {
-            throw CLIError("No arm64 system image installed.\n\(ctx.engines.missingPlayStoreImageAdvice ?? "")")
+        let image: InstalledSystemImage
+        if android == nil, ctx.engines.playStoreImages.isEmpty, let other = ctx.engines.preferredImage {
+            Out.err("Warning: no Play Store image; using \(other). \(ctx.engines.missingPlayStoreImageAdvice ?? "")")
+            image = other
+        } else {
+            do { image = try SystemImageCatalog.resolve(android, installed: ctx.engines.installedImages) } catch {
+                throw CLIError(describe(error))
+            }
         }
-        if let advice = ctx.engines.missingPlayStoreImageAdvice {
-            Out.err("Warning: no Play Store image; using \(image). \(advice)")
+        if let existing = try? ctx.store.load(id), android != nil, existing.systemImage != image.ref {
+            throw CLIError("\(id) already exists and runs \(existing.systemImage.androidLabel); an instance's Android version cannot be changed. Pick another name.")
         }
         let config = try ctx.store.create(try makeConfig(id: id, image: image.ref))
         if json { return try Out.json(config) }
-        Out.line("Created \(config.id): \(config.ramMB) MB RAM, \(config.cores) cores, \(config.display.width)x\(config.display.height)@\(config.display.density), gpu \(config.gpu.rawValue), governor \(ProfileArgument(config.memoryProfile).rawValue), image \(config.systemImage).")
+        Out.line("Created \(config.id): \(config.ramMB) MB RAM, \(config.cores) cores, \(config.display.width)x\(config.display.height)@\(config.display.density), gpu \(config.gpu.rawValue), governor \(ProfileArgument(config.memoryProfile).rawValue), \(config.systemImage.androidLabel), image \(config.systemImage).")
         if config.ramMB < 2048 {
-            Out.line("Note: engine 36.4.9 runs android-36.1 with at least 2048 MB, whatever is configured; `emuu list` shows the effective value after the first start.")
+            Out.line("Note: the engine may raise guest RAM below 2048 MB to 2048 (measured on 36.4.9 with API 36.1), whatever is configured; `emuu list` shows the effective value after the first start.")
         }
         Out.line("Start it with `emuu start \(config.id)` (first boot is a cold boot, ~25 s).")
     }
@@ -123,6 +133,8 @@ struct List: AsyncParsableCommand {
         var cores: Int
         var profile: String
         var image: String
+        /// Android version (API level) of the image, e.g. "35", "36.1".
+        var android: String?
         var supervised: Bool
     }
 
@@ -138,12 +150,12 @@ struct List: AsyncParsableCommand {
             rows.append(Row(name: config.id.rawValue, state: state.description, serial: serial?.rawValue,
                             ramMB: EffectiveRAM.megabytes(for: config, paths: ctx.paths), configuredRAMMB: config.ramMB,
                             cores: config.cores, profile: ProfileArgument(config.memoryProfile).rawValue,
-                            image: config.systemImage.description, supervised: registry.liveSupervisor(for: config.id) != nil))
+                            image: config.systemImage.description, android: config.systemImage.androidVersion?.number, supervised: registry.liveSupervisor(for: config.id) != nil))
         }
         if json { return try Out.json(rows) }
         if rows.isEmpty { return Out.line("No instances. Create one with `emuu create <name>`.") }
-        Out.line(Fmt.table(["NAME", "STATE", "SERIAL", "RAM", "CORES", "PROFILE", "SUPERVISED"],
-                           rows.map { [$0.name, $0.state, $0.serial ?? "-", Self.ramText(effective: $0.ramMB, configured: $0.configuredRAMMB), "\($0.cores)", $0.profile, $0.supervised ? "yes" : "no"] }))
+        Out.line(Fmt.table(["NAME", "STATE", "SERIAL", "ANDROID", "RAM", "CORES", "PROFILE", "SUPERVISED"],
+                           rows.map { [$0.name, $0.state, $0.serial ?? "-", $0.android ?? $0.image, Self.ramText(effective: $0.ramMB, configured: $0.configuredRAMMB), "\($0.cores)", $0.profile, $0.supervised ? "yes" : "no"] }))
     }
 }
 

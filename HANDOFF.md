@@ -2,6 +2,30 @@
 
 Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub; the orchestrator commits).
 
+## Status update (2026-11-19, Android version per instance)
+
+- **Asked:** TikTok's video is reported broken on Android 36 images (in-app YV12 decode → wrong gralloc layout, from an
+  investigation on the user's other Mac). The user narrowed the job to "implement the fix only": let instances run an
+  older Android version. Built on branch `android-version` (worktree `/Users/leslie/dev/emuu-android-version`),
+  tested only under a scratch `EMUU_HOME`; the real `~/.emuu` was not touched.
+- **New:** `emuu images list|install|remove` (sdkmanager-driven; licences accepted only on a terminal prompt or with
+  `--accept-licenses`; result verified from disk; remove refused while instances use the image), `emuu create
+  --android <v>` and `golden create --android <v>`, ANDROID column in `emuu list`, version in `emuu status`, one doctor
+  check per installed version (no failure without 36.1 if another Play image exists), the app's create sheet has an
+  Android version picker (installed versions; others named with their `emuu images install` command), the library
+  row shows the version. Changing an instance's version in place is refused (`InstanceStore.checkSameImage`); clones
+  and farm devices keep the source's. Catalogue: `Sources/EmuuEngine/SDK/SystemImageCatalog.swift`; supported 34, 35,
+  36, 36.1. **Default stays 36.1** (no evidence here to change it). Docs: README "Android version" (incl. the TikTok
+  note, workaround `--android 35` marked untested), ARCHITECTURE "Android versions", engine-findings "Android versions".
+- **Verified on android-35** (installed with `emuu images install 35`, left installed, 2.16 GiB): cold boot 15 s, adb,
+  Play Store present, display frames (probe + app self-test), CLI rotation, hibernate 2.2 s / resume 2.1 s with the
+  same boot id, `clone-instance` (resumes the snapshot). 34 and 36 were not installed or run.
+- **Found, not fixed:** the app's Rotate button/self-test rotation fails on this branch for **both 35 and 36.1**
+  (`setPhysicalModel` cancelled / deadline exceeded inside the app's session; garbled landscape frames labelled
+  portrait). `emuu rotate` works. Looks like a regression from the merged branches; needs its own fix.
+- **Not verified:** real TikTok on 35 (the actual point of the workaround), Google sign-in on 35, farm pools on 35,
+  the create sheet on screen (screen locked; only built and unit-tested).
+
 ## Status update (2026-11-19, clone an instance with its Google sign-in)
 
 - **Asked:** "If my Google Play is logged in on `phone`, allow me to clone `phone` so that the new simulator brings

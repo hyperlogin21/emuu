@@ -26,7 +26,7 @@ struct EmuuCLI: ParsableCommand {
         """,
         version: Emuu.version,
         subcommands: [
-            Doctor.self, Create.self, List.self, Delete.self,
+            Doctor.self, Create.self, List.self, Delete.self, Images.self,
             Start.self, Stop.self, Freeze.self, Thaw.self, Hibernate.self, Resume.self, Status.self,
             Install.self, Apps.self, Launch.self, Uninstall.self, Playstore.self, Screenshot.self, Record.self, Rotate.self, Shell.self,
             Keyboard.self, Automation.self, VideoDecoder.self,

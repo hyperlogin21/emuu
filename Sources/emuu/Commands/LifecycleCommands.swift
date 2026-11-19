@@ -404,6 +404,8 @@ struct Status: AsyncParsableCommand {
         var governor: String?
         var memory: MemoryReading?
         var automationMode: Bool?
+        /// "Android 15 (API 35)".
+        var android: String?
         /// Ready-to-paste adb command for this instance.
         var adbHint: String?
     }
@@ -415,6 +417,7 @@ struct Status: AsyncParsableCommand {
         for config in configs {
             var row = try await Self.row(ctx: ctx, config: config)
             row.automationMode = config.isAutomationMode
+            row.android = config.systemImage.androidLabel
             if let serial = row.serial, row.state.hasPrefix("running") || row.state.hasPrefix("frozen") {
                 row.adbHint = Self.adbHint(serial: serial)
             }
@@ -423,6 +426,7 @@ struct Status: AsyncParsableCommand {
         if json { return try Out.json(all ? AnyCodableRows.many(rows) : AnyCodableRows.one(rows[0])) }
         for r in rows {
             var head = "\(r.instance): \(r.state)"
+            if let a = r.android { head += " (\(a))" }
             if let s = r.serial { head += " on \(s)" }
             if let p = r.enginePID { head += ", engine pid \(p)" }
             head += r.supervisorPID.map { ", supervisor pid \($0)" } ?? ", no supervisor"

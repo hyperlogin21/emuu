@@ -354,6 +354,28 @@ func shortTempDir() throws -> URL {
         #expect(checks.first { $0.name == "Instances" }?.fix == "emuu create phone && emuu start phone")
     }
 
+    @Test func perImageChecksAndNoFailureWithoutThirtySixOne() {
+        var f = Self.facts()
+        f.playStoreImages = ["system-images;android-35;google_apis_playstore;arm64-v8a (API 35, Play Store)"]
+        f.images = [DoctorFacts.ImageFact(version: AndroidVersion(major: 35), package: "system-images;android-35;google_apis_playstore;arm64-v8a",
+                                          supported: true, isDefault: true, missingFiles: [], instances: ["old"])]
+        var checks = f.evaluate()
+        #expect(!checks.contains { $0.level == .fail || $0.level == .warn })
+        #expect(checks.first { $0.name == "Play Store image" }?.detail.contains("new instances get Android 15 (API 35)") == true)
+        #expect(checks.first { $0.name == "Android 15 (API 35)" }?.detail == "default for new instances; instances: old")
+
+        f.images.append(DoctorFacts.ImageFact(version: AndroidVersion(major: 34), package: "system-images;android-34;google_apis_playstore;arm64-v8a",
+                                              supported: true, isDefault: false, missingFiles: ["vendor.img"], instances: []))
+        f.images.append(DoctorFacts.ImageFact(version: AndroidVersion(major: 37), package: "p37", supported: false, isDefault: false,
+                                              missingFiles: [], instances: []))
+        checks = f.evaluate()
+        #expect(checks.first { $0.name == "Android 14 (API 34)" }?.level == .warn)
+        #expect(checks.first { $0.name == "Android 14 (API 34)" }?.fix?.contains("emuu images install 34") == true)
+        #expect(checks.first { $0.name == "Android 17 (API 37)" }?.level == .warn)
+        f.images[1].instances = ["x"]
+        #expect(f.evaluate().first { $0.name == "Android 14 (API 34)" }?.level == .fail)
+    }
+
     @Test func missingPiecesGetFixCommands() {
         var f = Self.facts()
         f.playStoreImages = []
@@ -364,7 +386,7 @@ func shortTempDir() throws -> URL {
         let checks = f.evaluate()
         let image = checks.first { $0.name == "Play Store image" }
         #expect(image?.level == .warn)
-        #expect(image?.fix == "/sdk/cmdline-tools/latest/bin/sdkmanager \"system-images;android-36.1;google_apis_playstore;arm64-v8a\"")
+        #expect(image?.fix == "emuu images install 36.1   (or: /sdk/cmdline-tools/latest/bin/sdkmanager \"system-images;android-36.1;google_apis_playstore;arm64-v8a\")")
         #expect(checks.first { $0.name == "adb" }?.fix == "/sdk/platform-tools/adb start-server")
         #expect(checks.first { $0.name == "Emulator engine" }?.level == .warn)
 

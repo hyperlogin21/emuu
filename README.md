@@ -25,9 +25,10 @@ steady over long sessions:
 Honest limits:
 
 * **Apple Silicon only** (arm64 macOS 14 or later). Images are arm64; x86-only apps will not install.
-* **Requires the Android SDK** with the `emulator` and `platform-tools` packages, plus a **Google Play system
-  image**: `system-images;android-36.1;google_apis_playstore;arm64-v8a`. Android Studio installs all of these.
-  Emuu does not download or repackage Google software.
+* **Requires the Android SDK** with the `emulator` and `platform-tools` packages, plus at least one **Google Play
+  system image**, by default `system-images;android-36.1;google_apis_playstore;arm64-v8a` (other Android versions:
+  see [Android version](#android-version)). Android Studio installs all of these. Emuu does not repackage Google
+  software; `emuu images install` only runs Google's own `sdkmanager`.
 * **The Play Store works only on `google_apis_playstore` images**, the Google-certified ones. These images
   are not rooted, and Emuu never roots them or bypasses Play certification. Some apps (banking, a few games
   with strict integrity checks) still refuse to run on any emulator.
@@ -55,13 +56,14 @@ emuu doctor                 # checks the host, SDK, engine, Play Store image and
 If `emuu doctor` reports a missing piece, it prints the command that fixes it, for example:
 
 ```sh
-~/Library/Android/sdk/cmdline-tools/latest/bin/sdkmanager "system-images;android-36.1;google_apis_playstore;arm64-v8a"
+emuu images install 36.1     # runs: sdkmanager "system-images;android-36.1;google_apis_playstore;arm64-v8a"
 ```
 
 ## Quick start
 
 ```sh
-emuu create phone                     # Play Store image, 2 GB, 4 cores, balanced governor
+emuu create phone                     # Play Store image (Android 16 QPR2, API 36.1), 2 GB, 4 cores, balanced governor
+#   other Android version: `emuu images install 35`, then `emuu create phone15 --android 35`
 emuu start phone --window             # boot it with a display window (Ctrl-C saves and stops)
 #   or headless in the background:
 emuu start phone --detach
@@ -87,8 +89,9 @@ With exactly one instance you can leave out the name. Otherwise use `-i <name>`,
 
 | Command | What it does |
 | --- | --- |
-| `doctor` | Host, SDK, engine, Play Store image and adb checks, with fix commands (`--json`). |
-| `create <name>` | New instance. `--preset standard\|lite\|gaming`; overrides: `--ram`, `--cores`, `--screen 1080x2400@420`, `--gpu`, `--no-audio`, `--port` (console port 5554–5584: adb only finds emulators there), `--profile`, `--video-decoder`. |
+| `doctor` | Host, SDK, engine, installed Android versions and adb checks, with fix commands (`--json`). |
+| `images list\|install <version>\|remove <version>` | Android versions (Google Play arm64 images): installed and installable, sizes, default, which instances use each (see [Android version](#android-version)). |
+| `create <name>` | New instance. `--android <version>` (e.g. `35`; fixed for the instance's life); `--preset standard\|lite\|gaming`; overrides: `--ram`, `--cores`, `--screen 1080x2400@420`, `--gpu`, `--no-audio`, `--port` (console port 5554–5584: adb only finds emulators there), `--profile`, `--video-decoder`. |
 | `list`, `delete <name>` | List instances; delete one with all its data (`-y` to skip the prompt). |
 | `start` | Boot and supervise. `--headless` (default) or `--window`; `--detach`; `--profile lite\|balanced\|performance`; `--cold-boot`; `--no-governor`; `--idle-freeze <min>`; `--automation`; `--video-decoder <mode>` (saved). |
 | `stop`, `freeze`, `thaw`, `hibernate`, `resume` | Lifecycle. These go through the supervisor when one runs. `stop --no-snapshot` cold-boots next time; `stop --force` sends SIGKILL. |
@@ -535,6 +538,46 @@ Emuu cannot guarantee that Google keeps the session valid when several copies ru
 some of them out or ask to verify the device). This was **not tested with a real Google account**: the copies were
 checked with an installed app, changed settings, a file in shared storage and the Android ID, all of which came
 across unchanged.
+
+## Android version
+
+Every instance runs one Android version, chosen when it is created. Emuu uses only the Google Play arm64 images
+(`system-images;android-<version>;google_apis_playstore;arm64-v8a`), never the 16 KB-page (`_ps16k`), tablet or
+`-extNN` variants.
+
+```sh
+emuu images list                          # installed + installable versions, sizes, default, instances using each
+emuu images install 35                    # downloads it with sdkmanager (asks you to accept Google's licence)
+emuu images install 35 --accept-licenses  # non-interactive (scripts/CI): you accept the licence by passing this
+emuu create phone15 --android 35          # also: 34, 36, 36.1 (= default); `golden create --android 35` for farms
+emuu list                                 # ANDROID column; `emuu status` and the app's library show it too
+emuu images remove 35                     # refused while an instance of this EMUU_HOME uses it
+```
+
+| Version | Android | Download | Status |
+| --- | --- | --- | --- |
+| 36.1 | Android 16 QPR2 | ≈ 2.0 GB | **Default.** What Emuu was developed and measured on. |
+| 36 | Android 16 | ≈ 1.9 GB | Supported, not tested by Emuu. |
+| 35 | Android 15 | ≈ 1.8 GB (2.2 GB installed) | Supported; smoke-tested (boot, display, adb, rotation, Play Store present, hibernate/resume, clone). |
+| 34 | Android 14 | ≈ 1.5 GB | Supported, not tested by Emuu. |
+
+* New instances get **36.1** when it is installed; without it, the newest installed supported version (`emuu doctor`
+  says which). In the app's **New Instance** sheet, pick the version under "Android version"; versions that are not
+  installed are listed with the Terminal command that installs them (the download needs Google's licence accepted,
+  so it stays in `emuu images install`).
+* **The version cannot be changed later.** An instance's data partition and snapshots belong to the system image
+  that created them; Emuu refuses to switch it in place. Create a new instance instead (and reinstall apps / sign in
+  again there). `emuu clone-instance` copies keep the source's version; farm goldens and their devices keep theirs.
+* If an instance's image is removed from the SDK (outside Emuu), its start fails with a message naming the
+  `emuu images install` command that puts it back.
+
+**TikTok shows a green / pink / striped video area?** Reported on Android 36 images (another investigation, real
+TikTok on another Mac): TikTok decodes its own codec in the app and writes YV12 frames straight into the video
+surface, and on the android-36 image the emulator's graphics allocator lays that buffer out differently from what the
+app assumes, so the picture is wrong in every GPU and decoder mode. The suggested workaround is an instance on an
+older Android version: `emuu images install 35 && emuu create tiktok --android 35` (or 34). **This is untested:**
+neither the bug nor the workaround was reproduced or verified here (no TikTok, no Google sign-in in Emuu's tests).
+The default stays 36.1 until it is.
 
 ## Video decoding
 

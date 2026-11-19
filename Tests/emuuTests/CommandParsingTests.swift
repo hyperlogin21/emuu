@@ -3,6 +3,7 @@ import Testing
 import ArgumentParser
 import EmuuBase
 import EmuuMemory
+import EmuuEngine
 @testable import emuu
 
 @Suite struct CommandParsingTests {
@@ -113,5 +114,44 @@ enum InstancePresetFixtures {
         InstanceConfig(id: InstanceID(rawValue: name)!, displayName: name, systemImage: .playStoreDefault, memoryProfile: profile,
                        ramMB: ramMB, cores: 4, vmHeapMB: 256, display: .lightweightPhone, dataPartitionMB: 6144,
                        ports: nil, gpu: .host, audioOutput: true, createdAt: Date(timeIntervalSince1970: 0))
+    }
+}
+
+@Suite struct AndroidVersionCommandTests {
+    @Test func createTakesAndroidVersion() throws {
+        let create = try #require(try EmuuCLI.parseAsRoot(["create", "old", "--android", "35"]) as? Create)
+        #expect(create.android == "35")
+        let plain = try #require(try EmuuCLI.parseAsRoot(["create", "new"]) as? Create)
+        #expect(plain.android == nil)
+        let golden = try #require(try EmuuCLI.parseAsRoot(["golden", "create", "g", "--android", "35"]) as? GoldenCreate)
+        #expect(golden.android == "35")
+    }
+
+    @Test func imagesSubcommands() throws {
+        #expect(try EmuuCLI.parseAsRoot(["images"]) is ImagesList)
+        let list = try #require(try EmuuCLI.parseAsRoot(["images", "list", "--offline", "--json"]) as? ImagesList)
+        #expect(list.offline && list.json)
+        let install = try #require(try EmuuCLI.parseAsRoot(["images", "install", "34", "--accept-licenses"]) as? ImagesInstall)
+        #expect(install.version == "34" && install.acceptLicenses)
+        let quiet = try #require(try EmuuCLI.parseAsRoot(["images", "install", "34"]) as? ImagesInstall)
+        #expect(!quiet.acceptLicenses)
+        let remove = try #require(try EmuuCLI.parseAsRoot(["images", "rm", "34", "-y"]) as? ImagesRemove)
+        #expect(remove.version == "34" && remove.yes)
+        #expect(throws: (any Error).self) { try EmuuCLI.parseAsRoot(["images", "install"]) }
+    }
+
+    @Test func listRendering() {
+        let rows = [
+            SystemImageCatalog.Row(version: "36.1", name: "Android 16 QPR2", package: "p", installed: true, supported: true, isDefault: true,
+                                   sizeBytes: 2 * ByteCount.gib, revision: "4", instances: ["a", "b"], note: nil),
+            SystemImageCatalog.Row(version: "34", name: "Android 14", package: "q", installed: false, supported: true, isDefault: false,
+                                   sizeBytes: ByteCount.gib, revision: nil, instances: [], note: "not tested by Emuu"),
+        ]
+        let text = ImagesList.render(rows)
+        #expect(text.contains("36.1 (default)"))
+        #expect(text.contains("installed r4"))
+        #expect(text.contains("a, b"))
+        #expect(text.contains("≈1.00 GiB download"))
+        #expect(text.contains("emuu images install <version>"))
     }
 }
