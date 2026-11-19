@@ -2,6 +2,31 @@
 
 Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub; the orchestrator commits).
 
+## Status update (2026-11-19, app Rotate button)
+
+- **Bug:** the app's Rotate button / self-test rotation: `setPhysicalModel` → DEADLINE_EXCEEDED/CANCELLED after 10 s,
+  Android rotated anyway, the window showed garbled frames (portrait size, landscape pixels) and did not resize.
+  `emuu rotate` worked. Branch `fix-rotate-button` (worktree `/Users/leslie/dev/emuu-rotate`), scratch `EMUU_HOME`.
+- **Found by bisect** (debug-build app self-test, `EMUU_APP_SELFTEST_ONLY=native`, rotation step as the test):
+  first bad **d420f2b** "Validate shared-memory frame reads" (= main 7ea7402, same tree; main was *not* good), last
+  good efa7691. The later merged branches did not cause it. It shows only where frame conversion is slower than the
+  frame rate: debug builds always (validated read ≈ 50 ms/frame unoptimised); release builds passed, also under CPU load.
+- **Cause:** frames were converted on the gRPC connection's single reader thread. Too slow → frame messages backed
+  up (transport latency ≈ 7 s), the `setPhysicalModel` reply waited behind them, and stale portrait metadata was
+  applied to the shared-memory region's current landscape pixels.
+- **Fix:** `SharedState.handleFrame` (EmulatorDisplaySession.swift) only stores the newest frame message and wakes a
+  serial conversion queue; superseded messages are dropped. The validation from d420f2b is kept unchanged.
+  `EmulatorDisplayController.lastRotateError`; the self-test's rotation steps now print `SELFTEST rotate step N … OK`
+  or `… FAILED: <reasons>` (call error, frames, Android rotation, window aspect). Unit test `FrameHandoffTests`
+  (fails on the old code: reader blocked 2 s, 51 conversions instead of 2).
+- **Verified (screen locked; observed through the self-test log, saved presented frames vs `adb exec-out screencap`,
+  `dumpsys window`, uiautomator):** 36.1 release: P→L→P ×4 + self-test steps, each frame 1600x720/720x1600 matching
+  Android and pixel-identical to screencap, window content 1210x519 / 396x757, landscape taps open "Network &
+  internet", recording across all rotations finalised (776 frames, 9 segments), keyboard self-test after the
+  rotations 42/44 (the same 2 failures as unfixed HEAD: dead-keys-tsm, one fast-2000 character), `EMUU_DISPLAY_DIAG`
+  0 torn/0 raced; debug build rotation passes too (latency 19 ms instead of 6.7 s). `emuu rotate` OK. android-35 (release): rotations, screencap match, taps and
+  recording OK; details in engine-findings. **Not verified:** a real click on the Rotate button on screen.
+
 ## Status update (2026-11-19, Android version per instance)
 
 - **Asked:** TikTok's video is reported broken on Android 36 images (in-app YV12 decode → wrong gralloc layout, from an
@@ -20,9 +45,8 @@ Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub
 - **Verified on android-35** (installed with `emuu images install 35`, left installed, 2.16 GiB): cold boot 15 s, adb,
   Play Store present, display frames (probe + app self-test), CLI rotation, hibernate 2.2 s / resume 2.1 s with the
   same boot id, `clone-instance` (resumes the snapshot). 34 and 36 were not installed or run.
-- **Found, not fixed:** the app's Rotate button/self-test rotation fails on this branch for **both 35 and 36.1**
-  (`setPhysicalModel` cancelled / deadline exceeded inside the app's session; garbled landscape frames labelled
-  portrait). `emuu rotate` works. Looks like a regression from the merged branches; needs its own fix.
+- The app's Rotate button failure seen while testing this (both 35 and 36.1, debug build) was not version-specific
+  and is fixed — see "Status update (… app Rotate button)" above.
 - **Not verified:** real TikTok on 35 (the actual point of the workaround), Google sign-in on 35, farm pools on 35,
   the create sheet on screen (screen locked; only built and unit-tested).
 

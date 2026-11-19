@@ -214,6 +214,28 @@ below was checked against 36.4.9 with an isolated instance (lite, 720x1600) and 
   (TextureView 1080p60: 40 distinct frames/s of 60) — identical in MMAP and inline, so not Emuu.
 * **Engine cost.** 60 fps MMAP streaming added roughly 10 points of one host core to the QEMU process during
   continuous swipes (≈84 % without a client, ≈94–95 % with one); guest CPU unchanged (see BENCHMARKS.md).
+* **Rotation from the app: frame conversion must not block the gRPC reader thread (fixed 2026-11-19).** Symptom: the
+  app's Rotate button (and self-test "rotate step 2") got `DEADLINE_EXCEEDED`/`CANCELLED` from `setPhysicalModel`
+  after 10 s, Android turned to ROTATION_90 anyway, the window kept 720x1600 frames whose pixels were the landscape
+  picture (diagonal garbage) and did not resize; `emuu rotate` (own connection) worked. Cause: frames were converted
+  (validated MMAP read, d420f2b) synchronously on the HTTP/2 connection's single reader thread. In a debug build that
+  read costs ≈ 50 ms per 720x1600 frame (unoptimised compare loop), so at 60 fps the app converted 19 fps at 99 % CPU
+  and frame messages piled up: transport latency 6.7–7.0 s. Every other reply on that connection — the
+  `setPhysicalModel` answer — waited behind the backlog and timed out, and each stale portrait message was applied to
+  the region's current (landscape) pixels: with MMAP only the newest message describes the region. Release builds
+  convert in ≈ 1–2 ms and were not affected (also not with 12 busy-loop processes on 10 cores). Bisect (debug build,
+  self-test rotation step, efa7691 good … eda4a83 bad): first bad d420f2b "Validate shared-memory frame reads"
+  (merged to main as 7ea7402, identical tree); efa7691 rotated fine (601 frames in 10 s, 2 ms latency). None of the
+  later branches (clone-instance, window-close, video-decoder, keyboard-input, android-version) changed it. Fix: the
+  reader thread only stores the newest frame message and wakes a serial conversion queue (latest wins; superseded
+  messages count as dropped). After: debug build 19 fps but 19 ms latency, rotation passes; release 59 fps, rotation
+  P→L→P ×4 with Settings: frame size, Android rotation and window aspect agree each time (~0.1 s), presented frames
+  pixel-identical to `adb exec-out screencap`, landscape taps open "Network & internet", recording across rotations
+  finalised (9 segments). Regression test: `FrameHandoffTests`; the self-test prints `SELFTEST rotate … FAILED`.
+  android-35 (release): self-test steps OK and P→L→P ×3, frames pixel-identical to screencap, landscape taps OK,
+  recording across rotations finalised; keyboard self-test after rotating 43/44 in one run (only dead-keys-tsm, which
+  needs real macOS composition) and 35/44 in another (typing-test focus lost early in a freshly booted instance);
+  keyboard-only on 35: 43/44 fixed vs 42/44 unfixed HEAD.
 
 ## Video decoding (measured 2026-11-19, green video in TikTok)
 
@@ -409,12 +431,8 @@ packages (`arm64-v8a-36_r07.zip` vs `arm64-v8a-36.1_r04.zip`). Approximate downl
   "Successfully loaded snapshot 'default_boot' using 654 ms".
 * `emuu clone-instance a35 a35c --stop-source`: 2.6 s; the clone resumed the snapshot in 1.6 s (477 ms load), API 35,
   the marker file present. `emuu images remove 35` was refused while `a35` existed.
-* **Not version-specific, found on the way:** the app's own Rotate (self-test step "rotate step 2") fails on both 35
-  and 36.1 on this branch: the in-session `setPhysicalModel` call ends with `CANCELLED` or `DEADLINE_EXCEEDED`
-  after 10 s, Android still turns to ROTATION_90, but the window keeps receiving frames labelled 720x1600 portrait
-  whose pixels are a landscape picture (saved frame shows diagonal garbage); the window does not resize. The CLI's
-  `emuu rotate` (own gRPC connection) works on both. Earlier evidence on 36.1 shows the app rotation working, so this
-  is a regression on the combined branch, not an Android-version issue. Not fixed here (out of scope).
+* The app's own Rotate (self-test "rotate step 2") failed here on both 35 and 36.1 in debug builds; not
+  version-specific, fixed since (see "Rotation from the app" above).
 * Not run on 35: Google sign-in, the farm (`golden create --android 35` + pool), the governor's guest tiers under
   pressure, long sessions.
 

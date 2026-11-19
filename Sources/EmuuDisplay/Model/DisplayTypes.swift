@@ -115,8 +115,9 @@ public struct DisplayStats: Sendable, Hashable {
     /// Frames received per second over the trailing window (0 while the guest screen is static).
     public var framesPerSecond: Double
     public var totalFrames: UInt64
-    /// Frames not delivered: the renderer/recorder still held every pooled buffer, or (MMAP) the engine kept
-    /// overwriting the region while it was read (`unstableFrames`).
+    /// Frames not delivered: superseded by a newer frame message before they were converted, the renderer/recorder
+    /// still held every pooled buffer, or (MMAP) the engine kept overwriting the region while it was read
+    /// (`unstableFrames`).
     public var droppedFrames: UInt64
     /// MMAP: frames whose shared-memory region changed while Emuu was copying it (the engine was already
     /// writing the next frame). With validation these were re-read or dropped, never shown torn.

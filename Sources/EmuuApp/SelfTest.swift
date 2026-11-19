@@ -498,9 +498,11 @@ final class SelfTestRunner {
         }
         report("SELFTEST rotate step 1: \(saveFrame(session, "rotate-1-portrait.png")) android=\(await rot()) window=\(Int(window.frame.width))x\(Int(window.frame.height))")
         session.rotate()
-        _ = await waitFor(seconds: 10) { display.rotation.isLandscape && (display.videoSize?.width ?? 0) > (display.videoSize?.height ?? 0) }
+        let landscapeOK = await waitFor(seconds: 10) { display.rotation.isLandscape && (display.videoSize?.width ?? 0) > (display.videoSize?.height ?? 0) }
         try? await Task.sleep(for: .seconds(2))
-        report("SELFTEST rotate step 2: \(saveFrame(session, "rotate-2-landscape.png")) android=\(await rot()) window=\(Int(window.frame.width))x\(Int(window.frame.height))")
+        let android2 = await rot()
+        report("SELFTEST rotate step 2: \(saveFrame(session, "rotate-2-landscape.png")) android=\(android2) window=\(Int(window.frame.width))x\(Int(window.frame.height))")
+        rotationCheck("step 2 (landscape)", callError: display.lastRotateError, framesOK: landscapeOK, android: android2, expected: "ROTATION_90", window: window, wide: true)
         // Tap "Network & internet" (bounds from uiautomator, in landscape display pixels = frame pixels).
         let ui = await shell(client, "uiautomator dump /sdcard/emuu-ui.xml >/dev/null && cat /sdcard/emuu-ui.xml")
         if let r = ui.range(of: "text=\"Network &amp; internet\""), let b = ui[r.upperBound...].range(of: "bounds=\"") {
@@ -521,9 +523,11 @@ final class SelfTestRunner {
             report("SELFTEST landscape tap: 'Network & internet' not found in the UI dump")
         }
         session.rotate()
-        _ = await waitFor(seconds: 10) { display.rotation == .portrait && (display.videoSize?.height ?? 0) > (display.videoSize?.width ?? 0) }
+        let portraitOK = await waitFor(seconds: 10) { display.rotation == .portrait && (display.videoSize?.height ?? 0) > (display.videoSize?.width ?? 0) }
         try? await Task.sleep(for: .seconds(2))
-        report("SELFTEST rotate step 3: \(saveFrame(session, "rotate-3-portrait.png")) android=\(await rot()) window=\(Int(window.frame.width))x\(Int(window.frame.height))")
+        let android3 = await rot()
+        report("SELFTEST rotate step 3: \(saveFrame(session, "rotate-3-portrait.png")) android=\(android3) window=\(Int(window.frame.width))x\(Int(window.frame.height))")
+        rotationCheck("step 3 (portrait)", callError: display.lastRotateError, framesOK: portraitOK, android: android3, expected: "ROTATION_0", window: window, wide: false)
         // Home screen (portrait-locked launcher) rotated: what the user sees.
         _ = await shell(client, "input keyevent 3")
         session.rotate()
@@ -534,6 +538,18 @@ final class SelfTestRunner {
         _ = await waitFor(seconds: 10) { display.rotation == .portrait }
         try? await Task.sleep(for: .seconds(1))
         window.level = .normal
+    }
+
+    /// Rotation verdict: the app's rotate call succeeded, and frames, Android and the window's aspect agree. Prints `SELFTEST rotate … FAILED` so a regression is loud.
+    private func rotationCheck(_ step: String, callError: String?, framesOK: Bool, android: String, expected: String, window: NSWindow, wide: Bool) {
+        let size = window.contentView?.frame.size ?? window.frame.size
+        let windowOK = wide ? size.width > size.height : size.height > size.width
+        var problems: [String] = []
+        if let callError { problems.append("rotate call failed: \(callError)") }
+        if !framesOK { problems.append("frames did not turn within 10 s (stale/garbled frames, see rotate-*.png)") }
+        if !android.contains(expected) { problems.append("Android reports \(android), expected \(expected)") }
+        if !windowOK { problems.append("window \(Int(size.width))x\(Int(size.height)) did not follow") }
+        report(problems.isEmpty ? "SELFTEST rotate \(step) OK" : "SELFTEST rotate \(step) FAILED: \(problems.joined(separator: "; "))")
     }
 
     /// Renders the window (display area is black: the video layer is not captured) in light and dark mode.

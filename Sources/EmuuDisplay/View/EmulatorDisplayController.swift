@@ -130,11 +130,18 @@ public final class EmulatorDisplayController {
         rotate(to: next)
     }
 
+    /// Last error of a rotate call (diagnostics/self-test), nil after a successful one.
+    public private(set) var lastRotateError: String?
+
     public func rotate(to target: SkinRotation) {
         let session = self.session
         Task { [weak self] in
-            do { try await session.setRotation(target) } catch {
+            do {
+                try await session.setRotation(target)
+                self?.lastRotateError = nil
+            } catch {
                 self?.logger.warning("rotate failed: \(error.localizedDescription)")
+                self?.lastRotateError = error.localizedDescription
             }
         }
     }
