@@ -141,3 +141,15 @@ import EmuuTestSupport
         #expect(reboots.first?.last?.contains("trimMemory") == true)
     }
 }
+
+@Suite struct PlatformHelperProtectionTests {
+    /// Packages seen in a real T2 kill list (API 36, 2026-11-19) that are platform plumbing, not apps.
+    @Test func platformHelpersAreNeverKilled() {
+        let entries = ["com.google.android.rkpdapp", "com.google.android.adservices.api", "com.google.android.configupdater",
+                       "com.google.android.cellbroadcastreceiver", "com.android.imsserviceentitlement", "com.google.android.as.oss",
+                       "com.android.chrome", "com.google.android.apps.photos"]
+            .map { GuestParsers.ProcessEntry(adj: 950, name: $0) }
+        let t = GuestEffector.selectTargets(entries, minAdj: 900, protected: .default, limit: 40)
+        #expect(Set(t.candidates.map(\.name)) == ["com.android.chrome", "com.google.android.apps.photos"])
+    }
+}

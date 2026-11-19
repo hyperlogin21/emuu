@@ -28,6 +28,14 @@ public struct ProtectedPackages: Sendable, Hashable {
         "com.google.android.webview", "com.google.android.trichromelibrary",
         "com.android.emulator", "com.google.android.apps.wellbeing",
         "com.android.server.telecom", "com.android.dynsystem",
+        // Platform helpers seen in a T2 kill list on API 36 (2026-11-19): key provisioning, ad services, config
+        // updates, cell broadcasts, IMS, private compute. Killing them frees little and can disturb sign-in
+        // (device attestation) or connectivity.
+        "com.google.android.rkpdapp", "com.android.rkpdapp",
+        "com.google.android.adservices", "com.android.adservices",
+        "com.google.android.configupdater",
+        "com.google.android.cellbroadcastreceiver", "com.android.cellbroadcastreceiver",
+        "com.android.imsserviceentitlement", "com.google.android.as.oss", "com.google.android.as",
     ])
 
     /// True if the process/package must not be targeted.

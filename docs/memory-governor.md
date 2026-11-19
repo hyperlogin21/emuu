@@ -173,11 +173,24 @@ Every guest sample also reads the guest kernel's `boot_id` and uptime. If the bo
 engine, the governor logs a warning with its last 12 actions (wall-clock time, action, outcome — T2 logs the exact
 package list) and emits `guestRebooted`; the app shows it in the HUD timeline and `emuu mem` prints `REBOOT`.
 
-What is known (docs/engine-findings.md): the engine can restart the guest by itself a few seconds after a
-quick-boot snapshot load, with no Emuu action (reproduced once on an isolated instance; seen twice in the user's
-logs, once with no governor action at all). The user's 23:22 restart came ~0–3 s after a T2 kill; a T2 kill of 24
-packages on the test instance (same command, same image) did not restart it. With the policy change above, that
-T2 would not have run (host pressure, grace period, Play Store sign-in in the foreground).
+What is known (docs/engine-findings.md), from 7 hibernate→quick-boot cycles on an isolated instance with
+`logcat -b all`, `/proc/uptime` and `boot_id` captured every second:
+
+* 1 of 7 resumes restarted the guest **by itself**, a few seconds after the snapshot load and before any Emuu
+  action (00:09 UTC, after a 35-minute session). The user's log shows the same signature at 17:02, also with no
+  governor action.
+* Replaying the user's timeline exactly (resume, T1 MODERATE at +30 s, T2 kill at +75 s) after a 20-minute busy
+  session (apps, gRPC frames, rotation, trims) did **not** restart the guest; neither did T2 kills of 18–24
+  packages in other runs.
+* So the user's 23:22 restart most likely has the same engine-side cause as the spontaneous one, and coincided
+  with the T2 kill (~0–3 s apart); a kill-induced restart was not reproduced. The cause of the spontaneous restart
+  is not established (the shell user cannot read the previous boot's kernel log; `ro.boot.bootreason` is always
+  `reboot` on the emulator).
+
+What changed anyway: the governor would no longer have acted at all in the user's situation (host pressure,
+grace period after resume, Play Store sign-in in front); T2 no longer kills platform helpers (`rkpdapp`,
+`adservices`, `configupdater`, cell broadcast, IMS, private compute services — they were in the observed kill
+list); and the next restart is detected and logged with the exact preceding actions.
 
 ## 5. Long-horizon hygiene
 

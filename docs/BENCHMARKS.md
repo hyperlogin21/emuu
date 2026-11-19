@@ -47,9 +47,9 @@ previously open apps came back.
 * **Lower footprint while in use, by about 8-14 %.** Emuu's tuned instance (smaller screen, no mic,
   cameras or sdcard, no Qt window) costs 400-700 MiB less than the stock-style AVD after boot and after
   launching apps. It is still about 4.3-4.5 GiB for a 2 GiB guest: most of the cost is the engine itself,
-  which Emuu cannot change. The Emuu numbers do not include display streaming: while a window is visible
-  the scrcpy server adds about 170 MB inside the guest (not on the host directly) and the app itself is
-  40-50 MB. Both stop when the window is hidden.
+  which Emuu cannot change. The Emuu numbers do not include the display: at the time the scrcpy server added
+  about 170 MB inside the guest while a window was visible; the current display (engine framebuffer over gRPC,
+  see the last section) adds nothing in the guest.
 * **Freezing alone does not lower the footprint.** A frozen engine keeps its 4.3 GiB `phys_footprint`.
   macOS compresses or swaps the stopped process's pages (resident fell to 16 MiB), so it stops costing CPU
   and active RAM, but the memory is still charged to the Mac's compressor/swap: at the end of the first
@@ -80,10 +80,40 @@ previously open apps came back.
 | Hibernate (save + quit) | 1.1 s |
 | Resume from hibernation | 2.1 s (engine footprint right after resume: 1.80 GiB, growing as pages are touched) |
 | Stop | 6.2 s |
-| Display: scrcpy session start to first decoded frame | 0.42 s |
-| Display: resume after pause | 0.90 s |
+| Display (old scrcpy path): session start to first decoded frame | 0.42 s |
+| Display (old scrcpy path): resume after pause | 0.90 s |
 
 Manual tiers on `emuu-e2e` with 4 apps open (`emuu mem trim`, `mem trim --kill`, `mem reclaim`):
 T1 trim MODERATE applied to 20/20 processes, +0 B guest MemAvailable; T2 kill of cached apps (19 packages)
 +86 MiB; T3 reclaim `unsupported` (no balloon driver in the guest kernel); `compact system` +47 MiB. None of
 these change the engine's host footprint measurably; only hibernate returns host memory.
+
+## Display: engine framebuffer over gRPC vs the old scrcpy stream (2026-11-19)
+
+Same Mac (16 GiB, other engines running, so ±20 %). Instance `agent-test` (lite, 720x1600 @ 320, 2 vCPUs,
+`-gpu host`), isolated `EMUU_HOME`. New path measured inside the release app by its self-test
+(`EMUU_APP_SELFTEST=cycle:agent-test:1 EMUU_APP_SELFTEST_ONLY=native`, the code is in `SelfTest.exerciseNativeDisplay`);
+guest/engine A/B measured with the same 15 s swipe loop for "no display client", "scrcpy-server 5.0.1 (8 Mbit/s,
+60 fps, as the old Emuu ran it)" and "gRPC streamScreenshot with shared memory".
+
+| | Old: scrcpy (H.264 in the guest → VideoToolbox) | New: engine framebuffer (gRPC + shm) |
+| --- | --- | --- |
+| Something in the guest | scrcpy-server `app_process`: **~171 MB RSS** (+2 small shells) | **nothing** |
+| Guest CPU during animation (sum over vCPUs) | 71–74 % (no client: 63–65 %) → **+7–11 points** | 65–66 % → **+1 point (noise)** |
+| Engine (QEMU) host CPU during animation | 86–93 % (no client: 83–84 %) | 94–95 % → **+10 points** (framebuffer readback + copy into shm at 60 fps) |
+| App CPU, static screen (20 s, window "visible") | stream kept running (encoder repeat-frame every 0.5 s); not measured here | **0.12 %, 0–2 frames** (release; engine sends nothing) |
+| App CPU during animation (10 s of swipes) | not measured (needs a visible window; this session's desktop could not show one) | **4.2 %** at 59.6 fps, 0 dropped (release); 2.8 % at 55 fps, 6 dropped in a run with the host busy |
+| App footprint | 40–50 MB (earlier measurement) | 56–80 MB (release, window open; ~5 pooled 4.6 MB frame buffers) |
+| Engine → app transport latency (frame timestamp → receipt) | – | 2.6–5.6 ms (30 ms once with the host busy) |
+| Input → first changed frame (Recents key, n = 8) | – | **min 31, median 42–47, max 52–66 ms** (+ ≤ 1 vsync to glass) |
+| Window shown → first frame | 0.90–0.99 s (stream restart) | **0.15 s** (reopen stream; current frame sent at once); first open 0.22–0.27 s |
+| Focus changes | restarted the stream (60 ↔ 15 fps), every few seconds in the user's log | **no restarts**: only shown/hidden open/close the stream |
+| Secure (`FLAG_SECURE`) windows | **black** | shown (docs/evidence/secure-window-native.png) |
+
+Notes:
+
+* The old path's per-frame host work was an H.264 decode (VideoToolbox, partly in `VTDecoderXPCService`); the new
+  path's is one 4.6 MB RGBA→BGRA vImage permute into a pooled IOSurface (≈0.5 ms), then zero-copy to the window
+  server. The engine pays the readback instead of the guest paying an encoder.
+* With the window hidden both paths cost nothing (old: stream paused after 3 s; new: stream closed after 1 s).
+* App binary: 4.0 MB bundle (was 3.9 MB); no third-party gRPC/protobuf/NIO packages (hand-written h2c client).

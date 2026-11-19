@@ -51,7 +51,7 @@ struct Create: AsyncParsableCommand {
     @Flag(help: "Disable guest audio output (the microphone is always off).")
     var noAudio = false
 
-    @Option(help: "Fixed console port (even, 5554-5682); adb uses port+1. Default: first free pair at launch.")
+    @Option(help: "Fixed console port (even, 5554-5584); adb uses port+1. Default: first free pair at launch.")
     var port: Int?
 
     @Flag(help: "JSON output.")
@@ -67,7 +67,12 @@ struct Create: AsyncParsableCommand {
 
     func makeConfig(id: InstanceID, image: SystemImageRef) throws -> InstanceConfig {
         var config = preset.preset.makeConfig(id: id, displayName: displayName, systemImage: image,
-                                              ports: try port.map { try InstancePorts(console: $0) })
+                                              ports: try port.map { p in
+                                                  // adb only discovers emulators whose adb port is 5555…5585 (the engine warns
+                                                  // "outside the recommended range"); higher ports boot but never show up.
+                                                  guard p <= 5584 else { throw CLIError("--port \(p): adb only finds emulators on console ports 5554-5584") }
+                                                  return try InstancePorts(console: p)
+                                              })
         if let ram { config.ramMB = ram }
         if let cores { config.cores = cores }
         if let profile { config.memoryProfile = profile.memoryProfile }

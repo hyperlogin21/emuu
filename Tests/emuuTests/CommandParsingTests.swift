@@ -83,14 +83,14 @@ import EmuuMemory
 
     @Test func createBuildsValidatedConfig() throws {
         let create = try #require(try EmuuCLI.parseAsRoot(
-            ["create", "big", "--preset", "gaming", "--ram", "4096", "--cores", "6", "--screen", "1080x2400@420", "--gpu", "swiftshader_indirect", "--no-audio", "--port", "5600"]) as? Create)
+            ["create", "big", "--preset", "gaming", "--ram", "4096", "--cores", "6", "--screen", "1080x2400@420", "--gpu", "swiftshader_indirect", "--no-audio", "--port", "5580"]) as? Create)
         let config = try create.makeConfig(id: try InstanceID(validating: "big"), image: .playStoreDefault)
         #expect(config.ramMB == 4096)
         #expect(config.cores == 6)
         #expect(config.display == DisplaySpec(width: 1080, height: 2400, density: 420))
         #expect(config.gpu == .swiftshaderIndirect)
         #expect(!config.audioOutput)
-        #expect(config.ports?.console == 5600)
+        #expect(config.ports?.console == 5580)
         #expect(config.memoryProfile == .performance)
 
         let bad = try #require(try EmuuCLI.parseAsRoot(["create", "x", "--ram", "100"]) as? Create)

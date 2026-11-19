@@ -2,6 +2,19 @@
 
 Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (not a git repository; nothing has been committed).
 
+## Status update (2026-11-19, later)
+
+The display agent described under "In progress" has finished; that section is now history. `swift build` and `swift test` (378 tests) pass.
+
+- **Display** now uses the engine's host framebuffer over gRPC (`Sources/EmuuGRPC`, own client, no external packages). scrcpy is removed. Secure windows are visible (`docs/evidence/secure-window-native.png`).
+- **Rotation** turns the virtual device; `emuu rotate` added. Portrait-locked apps (home screen) stay portrait, shown sideways, by choice.
+- **Governor:** Mac memory pressure no longer triggers guest trim/kill; guest tiers wait 3 minutes after boot/resume and never run during Play Store, sign-in or installer screens.
+- **Guest reboot not root-caused.** It was not reproduced as caused by the kill tier; one of 7 resumes restarted the guest by itself right after a snapshot load. Reboots are now detected and logged with the governor's last 12 actions.
+- **`emuu-e2e` deletion:** the agent states it did not delete it; the log line is consistent with a delete from the app's library. The user has not yet said whether they did it.
+- **`emuu-dev2`** is the only instance. The user signed in to Google on it. It had a console port (5600) outside adb's scan range and could not boot; the `ports` entry was removed from `~/.emuu/instances/emuu-dev2.json` (backup beside it, `.bak-ports`). Its quick-boot snapshot was discarded, so the next start is a cold boot. Not yet booted since the fix.
+- **Not verified on screen:** minimise/restore with real window events, trackpad pinch/scroll, device-to-Mac clipboard. Non-ASCII typing from the Mac keyboard does not reach Android (paste works).
+- **Next:** user relaunches `dist/Emuu.app` and tries sign-in screens, rotation and un-minimise; then start the automation-farm work below once the user answers the three farm questions.
+
 ## Goal
 
 A lightweight Android emulator for macOS (Apple Silicon) with:
@@ -13,6 +26,16 @@ A lightweight Android emulator for macOS (Apple Silicon) with:
 - a native window with side controls (screenshot, recording, keyboard, volume, rotate).
 
 The user asked for implementation to be delegated to Opus subagents, using workflows.
+
+**Goal update (2026-11-19):** the primary use is now **automation farms for testing** — spinning up emulators on demand and driving them over adb. The interactive window stays, but headless, many-instance operation takes priority. Not started; planned after the display agent finishes:
+
+- on-demand instances from a prepared "golden" instance (APFS copy-on-write clone + quick-boot snapshot, so a new emulator is ready in seconds and costs little disk),
+- ephemeral instances that are destroyed or reset to the clean snapshot after a test,
+- a pool with automatic port allocation, acquire/release leases, and a capacity limit derived from host RAM,
+- machine-readable control (JSON output, and a local API if needed) so CI or a test runner can request devices,
+- lowest possible per-instance footprint when headless: today an engine uses about 4.3 GiB, so a 16 GB Mac fits roughly 2–3 at once. Reducing this (guest RAM, GPU mode, no display pipeline) is the key measurement.
+
+Unanswered by the user: where the farm runs (this Mac, dedicated Macs, or Linux servers — Emuu is macOS-only today), how many emulators at once, and whether farm devices need Play Store / a signed-in Google account.
 
 ## Key decisions and why
 

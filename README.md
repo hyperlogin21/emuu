@@ -88,7 +88,7 @@ With exactly one instance you can leave out the name. Otherwise use `-i <name>`,
 | Command | What it does |
 | --- | --- |
 | `doctor` | Host, SDK, engine, Play Store image and adb checks, with fix commands (`--json`). |
-| `create <name>` | New instance. `--preset standard\|lite\|gaming`; overrides: `--ram`, `--cores`, `--screen 1080x2400@420`, `--gpu`, `--no-audio`, `--port`, `--profile`. |
+| `create <name>` | New instance. `--preset standard\|lite\|gaming`; overrides: `--ram`, `--cores`, `--screen 1080x2400@420`, `--gpu`, `--no-audio`, `--port` (console port 5554–5584: adb only finds emulators there), `--profile`. |
 | `list`, `delete <name>` | List instances; delete one with all its data (`-y` to skip the prompt). |
 | `start` | Boot and supervise. `--headless` (default) or `--window`; `--detach`; `--profile lite\|balanced\|performance`; `--cold-boot`; `--no-governor`; `--idle-freeze <min>`; `--automation`. |
 | `stop`, `freeze`, `thaw`, `hibernate`, `resume` | Lifecycle. These go through the supervisor when one runs. `stop --no-snapshot` cold-boots next time; `stop --force` sends SIGKILL. |

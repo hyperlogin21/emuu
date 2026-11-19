@@ -312,7 +312,8 @@ final class SelfTestRunner {
             window.orderFrontRegardless()
             let back = await waitFor(seconds: 30) {
                 guard let d = session.display else { return false }
-                return d.state == .streaming && d.session.stats().framesPerSecond > 0
+                // A static screen sends one frame on reopen and then nothing: check streaming + that frame.
+                return d.state == .streaming && d.session.stats().totalFrames > 0
             }
             report("SELFTEST restore #\(round) → streaming=\(back) after \(fmt(ContinuousClock.now - t1)) [miniaturized=\(window.isMiniaturized) key=\(window.isKeyWindow) appActive=\(NSApp.isActive) occlusionVisible=\(window.occlusionState.contains(.visible)) viewVisible=\(session.display?.view.isEffectivelyVisible ?? false) state=\(session.display?.state.description ?? "-")]")
             window.level = .normal

@@ -204,11 +204,21 @@ public final class GRPCChannel: @unchecked Sendable {
         let result = Locked<[UInt8]?>(nil)
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[UInt8], any Error>) in
             do {
-                _ = try start(path, request: request, timeout: timeout, onMessage: { m in
+                let handle = try start(path, request: request, timeout: timeout, onMessage: { m in
                     result.set(Array(m))
                 }, onEnd: { status in
                     if status.isOK { cont.resume(returning: result.current ?? []) } else { cont.resume(throwing: status) }
                 })
+                // Client-side deadline too: a SIGSTOPped (frozen) engine cannot answer, not even with
+                // DEADLINE_EXCEEDED.
+                if let timeout {
+                    let ns = timeout.components.seconds * 1_000_000_000 + timeout.components.attoseconds / 1_000_000_000 + 500_000_000
+                    DispatchQueue.global().asyncAfter(deadline: .now() + .nanoseconds(Int(ns))) {
+                        guard !handle.isFinished else { return }
+                        handle.connection?.resetStream(handle.streamID)
+                        handle.call.finish(GRPCStatus(code: GRPCStatus.deadlineExceededCode, message: "no answer within \(timeout)"))
+                    }
+                }
             } catch {
                 cont.resume(throwing: error)
             }

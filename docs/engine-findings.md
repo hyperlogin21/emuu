@@ -209,8 +209,8 @@ below was checked against 36.4.9 with an isolated instance (lite, 720x1600) and 
   so the reason string carries no information.
 * The user's `emuu-e2e` log shows the same signature twice: 17:02 (no governor action at all) and 23:21–23:22
   (`Boot completed in 9142 ms`, history `reboot,1795044157` = 23:22:37).
-* Five further resume cycles from short sessions did not restart. See docs/memory-governor.md ("Guest restarts")
-  for what Emuu does about it.
+* Six further resume cycles did not restart (five from 1–2-minute sessions, one from a 20-minute busy session
+  followed by the user's exact T1→T2 timeline). See docs/memory-governor.md ("Guest restarts").
 
 ## Unverified / open
 

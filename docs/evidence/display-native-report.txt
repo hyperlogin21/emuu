@@ -1,0 +1,64 @@
+# Native display evidence (2026-11-19, release build, isolated instance agent-test, engine 36.4.9)
+
+## App self-test (EMUU_APP_SELFTEST=cycle:agent-test:2, then EMUU_APP_SELFTEST_ONLY=native)
+SELFTEST start pid=36887 instance=agent-test cycles=2 footprint=22.3MB icons=/tmp/claude-501/-Users-leslie-dev-emuu/c4db58ba-5e83-40c0-a7f6-74dbd9155ac5/scratchpad/app/Emuu.app/Contents/Resources/Emuu_EmuuApp.bundle/Contents/Resources/Icons
+SELFTEST closed auto-attached window footprint=34.6MB liveSessions=0 liveWindowControllers=0 windowsOpen=0
+SELFTEST cycle 1 streaming after 0.22s; frames=1 dropped=0 streams=1 transportLatency=3.4ms video=720x1600 governs=true automation=false
+SELFTEST home key → topResumedActivity=ActivityRecord{62738233 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t2}
+SELFTEST screenshot Emuu agent-test 2026-11-19 at 08.49.05.png bytes=965528
+SELFTEST play store installed=true version=54.2.12-34 [0] [PR] 1019424474
+SELFTEST volume before [- STREAM_RING: streamVolume:5 - STREAM_MUSIC: streamVolume:4] after up [- STREAM_RING: streamVolume:5 - STREAM_MUSIC: streamVolume:5] after down [- STREAM_RING: streamVolume:5 - STREAM_MUSIC: streamVolume:3] changed=true
+SELFTEST keyboard focused[shown=false,editor=false] off[shown=false,editor=false] tapWhileOff[shown=false,editor=true] on[shown=true,editor=true] typed=true show_ime_with_hard_keyboard=1 evidence=keyboard-*.png
+SELFTEST recording Emuu agent-test 2026-11-19 at 08.49.28.mp4 files=1 frames=201 duration=10.66s bytes=7773688 size=720x1600 codec=h264 midFrame=720x1600 → record-app-mid-frame.png governorSawVisible=true
+SELFTEST drop install emuu-securetest.apk finished=true status=Optional(EmuuApp.InstallJob.Status.succeeded("Installed dev.emuu.securetest"))
+SELFTEST pm list packages dev.emuu.securetest → package:dev.emuu.securetest
+SELFTEST launched dev.emuu.securetest → topResumedActivity=ActivityRecord{115619893 u0 dev.emuu.securetest/.SecureActivity t54}
+SELFTEST uninstalled dev.emuu.securetest ok=true
+SELFTEST minimized → paused=true visibleToGovernor=false streamsOpened=2
+SELFTEST restore #1 → streaming=false after 30.19s [miniaturized=false key=false appActive=false occlusionVisible=false viewVisible=false state=paused]
+SELFTEST restore #2 → streaming=false after 30.01s [miniaturized=false key=false appActive=false occlusionVisible=false viewVisible=false state=paused]
+SELFTEST hidden → paused=true framesWhilePaused=0; shown → first frame 0.15s (no fps switching: streamsOpened=3)
+SELFTEST idle (home, static, 20 s): frames=2 appCPU=0.12% footprint=76.0MB
+SELFTEST animation (swipes, 10.4 s): frames=573 (55.4 fps) appCPU=2.8% dropped=6 footprint=80.5MB transportLatency=30.7ms
+SELFTEST input→first-frame latency (Recents key, n=8): min=35ms median=47ms max=66ms (polled every 2 ms; excludes ≤1 vsync to glass)
+SELFTEST rotate step 1: rotate-1-portrait.png 720x1600 android=mDisplayRotation=ROTATION_0 window=397x785
+SELFTEST rotate step 2: rotate-2-landscape.png 1600x720 android=mDisplayRotation=ROTATION_90 window=1210x547
+SELFTEST landscape tap on 'Network & internet' at frame (300,466) → topResumedActivity=ActivityRecord{150167991 u0 com.android.settings/.SubSettings t55} [page shows the 'Internet' entry → Network & internet opened]
+SELFTEST rotate step 3: rotate-3-portrait.png 720x1600 android=mDisplayRotation=ROTATION_0 window=396x785
+SELFTEST rotate home: rotate-4-home-landscape.png 1600x720 android=mDisplayRotation=ROTATION_0
+SELFTEST cycle 1 closed detached=true footprint=59.1MB liveSessions=1 liveWindowControllers=0 windowsOpen=0
+SELFTEST cycle 2 streaming after 0.27s; frames=1 dropped=0 streams=1 transportLatency=5.6ms video=720x1600 governs=true automation=false
+SELFTEST cycle 2 closed detached=true footprint=63.7MB liveSessions=1 liveWindowControllers=0 windowsOpen=0
+SELFTEST window[0] title="Emuu" size=560x380 class=AppKitWindow
+SELFTEST DONE footprint=63.8MB liveSessions=0 liveWindowControllers=0 windowsOpen=0
+
+SELFTEST start pid=39283 instance=agent-test cycles=1 footprint=22.3MB icons=/tmp/claude-501/-Users-leslie-dev-emuu/c4db58ba-5e83-40c0-a7f6-74dbd9155ac5/scratchpad/app/Emuu.app/Contents/Resources/Emuu_EmuuApp.bundle/Contents/Resources/Icons
+SELFTEST closed auto-attached window footprint=43.5MB liveSessions=0 liveWindowControllers=0 windowsOpen=0
+SELFTEST cycle 1 streaming after 0.22s; frames=1 dropped=0 streams=1 transportLatency=3.7ms video=720x1600 governs=true automation=false
+SELFTEST hidden → paused=true framesWhilePaused=0; shown → first frame 0.15s (no fps switching: streamsOpened=2)
+SELFTEST secure window → secure-window-native.png 720x1600 (adb screencap: secure-window-adb-screencap.png) flags=fl=LAYOUT_IN_SCREEN
+SELFTEST idle (home, static, 20 s): frames=0 appCPU=0.12% footprint=67.5MB
+SELFTEST animation (swipes, 10.2 s): frames=609 (59.6 fps) appCPU=4.2% dropped=0 footprint=67.5MB transportLatency=2.6ms
+SELFTEST input→first-frame latency (Recents key, n=8): min=31ms median=42ms max=52ms (polled every 2 ms; excludes ≤1 vsync to glass)
+SELFTEST rotate step 1: rotate-1-portrait.png 720x1600 android=mDisplayRotation=ROTATION_0 window=397x785
+SELFTEST rotate step 2: rotate-2-landscape.png 1600x720 android=mDisplayRotation=ROTATION_90 window=1210x547
+SELFTEST landscape tap on 'Network & internet' at frame (300,466) → topResumedActivity=ActivityRecord{146155416 u0 com.android.settings/.SubSettings t57} [page shows the 'Internet' entry → Network & internet opened]
+SELFTEST rotate step 3: rotate-3-portrait.png 720x1600 android=mDisplayRotation=ROTATION_0 window=396x785
+SELFTEST rotate home: rotate-4-home-landscape.png 1600x720 android=mDisplayRotation=ROTATION_0
+SELFTEST cycle 1 closed detached=true footprint=56.0MB liveSessions=1 liveWindowControllers=0 windowsOpen=0
+SELFTEST window[0] title="Emuu" size=560x380 class=AppKitWindow
+SELFTEST DONE footprint=56.0MB liveSessions=0 liveWindowControllers=0 windowsOpen=0
+
+Note: 'restore #1/#2 → streaming=false' are AppKit-driven restores of a minimised window; the shell-launched app could not bring its window on screen in this session (occlusionVisible=false, appActive=false), so those two lines test the desktop, not the display. The 'hidden → paused … shown → first frame 0.15s' line drives the same visibility callback directly.
+
+## Rotation: 'dumpsys window displays | grep -o mDisplayRotation=…' at each step
+SELFTEST rotate step 1: rotate-1-portrait.png 720x1600 android=mDisplayRotation=ROTATION_0 window=397x785
+SELFTEST rotate step 2: rotate-2-landscape.png 1600x720 android=mDisplayRotation=ROTATION_90 window=1210x547
+SELFTEST rotate step 3: rotate-3-portrait.png 720x1600 android=mDisplayRotation=ROTATION_0 window=396x785
+SELFTEST rotate home: rotate-4-home-landscape.png 1600x720 android=mDisplayRotation=ROTATION_0
+
+## CLI
+$ emuu rotate agent-test portrait|landscape|right  (Settings in front)
+agent-test: device landscape → portrait (Android: ROTATION_0) / portrait → landscape (ROTATION_90) / landscape → reverse landscape (ROTATION_270)
+$ emuu record agent-test record-cli.mp4 --duration 9   (swipes, rotate landscape and back on the home screen)
+Recorded 138 frames, 9.4 s of video: record-cli.mp4 (h264 720x1600, 136 frames), record-cli-2.mp4 (1600x720), record-cli-3.mp4 (720x1600)
