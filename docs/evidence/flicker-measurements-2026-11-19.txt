@@ -1,0 +1,48 @@
+Display flicker investigation, 2026-11-19 (Apple M5, 16 GB; engine 36.4.9; android-36.1 Play image, 720x1600 @ 320,
+2 vCPUs, -gpu host; isolated EMUU_HOME instance "flick", deleted afterwards). Screen locked during the runs: frames
+were analysed as Emuu delivered/presented them (CALayer contents), not as the WindowServer composited them.
+
+Tools: emuu debug display-probe (CLI reader), EMUU_DISPLAY_DIAG (window = emuu start --window, presented frames),
+scripts/flicker-test (pattern video, test APK, run-scenarios.sh). Load = scratch "memhog": 8-10 threads of 64 MB memcpy.
+
+1. Frame source, no load (probe, MMAP without validation + inline stream at the same time, 20-30 s each)
+   scenario                              frames  torn ooo blank green flash  distinct/s (mmap = inline)
+   SurfaceView H.264 1080x1920@60         1873     0   0    0     0     0    59.9
+   TextureView H.264 1080x1920@60         1873     0   0    0     0     0    40.6 (609 dup / 612 skipped, same inline)
+   SurfaceView H.264 1080p30, in-feed 0.6 1867     0   0    0     0     0    30.2
+   TextureView H.264 720p60, in-feed 0.6  1871     0   0    0     0     0    55.0
+   GL 60 fps pattern                      1874     0   0    0     0     0    59.9
+   landscape 1920x1080@60 letterboxed     1863     0   0    0     0     0    59.9 (first run showed 257 "torn": analyser
+                                                                              false positive, UI over a marker; fixed)
+   HEVC 1080p60 SurfaceView               1219     0   0    0     0     0    59.8
+   HEVC 1080p30 TextureView               1242     0   0    0     0     0    30.1
+   VP9 1080p60 SurfaceView                1256     0   0    0     0     0    60.0
+   noise 12 Mbit/s H.264 1080p30/60, HEVC 1080p30, TextureView 1080p60: 1500-1600 frames each, all 0
+   GL per-frame 1080x1920 texture upload  1585     0   0    0     0     0    60.0
+   Probe under CPU (12x yes) or memory load (8-10 memhog threads), raw and validated, 60 s: 0 artefacts, 0 races.
+
+2. Window process (emuu start --window, EMUU_DISPLAY_DIAG), 90 s of memhog 8, ~6 000 presented frames per run
+   run                       validation  presented  torn presented  shm races detected  first read torn (not shown)
+   GL60 #1                   off         5693       0               (not measurable)
+   GL60 #2                   off         6054       2               (not measurable)   -> flicker-torn-presented-unvalidated.png
+   GL60 #3                   on (2-pass) 6055       0               24                 12 -> flicker-torn-read-caught-by-validation.png
+   GL60 #4                   on (1-pass) 6077       0               29                 n/a
+   noise H.264 1080p60       off         5987       0               (not measurable)
+   noise H.264 1080p60       on (1-pass) 6098       0               49                 17
+   All validated window runs together: 143 races, 54 first reads torn, 89 whole; engine timestamp -> read 2.4-3783 ms (p50 29.5).
+   Rows changed during the read always started at row 18 (top of the picture) => the engine writes bottom row first.
+   Other presented artefacts: 1 A-B-A flash in the validated video run = a decoded frame with the right counter but
+   background/bar from another frame (flicker-engine-decoded-frame-glitch.png): produced by the guest/host decoder,
+   not by the read; out-of-order/pattern-lost only at activity start.
+
+3. Recording and screenshots under load (GL60, memhog 8)
+   emuu record 20 s validated: 1243 frames, 0 torn; EMUU_DISPLAY_SHM_VALIDATE=0: 1217 frames, 0 torn (no race hit).
+   emuu screenshot x20 (engine PNG, separate path): 0 torn.
+
+4. Cost (probe, release, GL60, 20 s, idle Mac, 2-3 repeats)
+   mode                 probe CPU (1 core)  read+convert p50/p95       engine->Emuu p50  footprint  engine CPU
+   MMAP, not validated  5.4-6.8 %           0.61-0.96 / 1.08-1.10 ms   4.0-4.2 ms        14-27 MB   80-89 %
+   MMAP, validated      9.1-9.8 %           1.36-1.50 / 1.71-1.72 ms   3.7-3.8 ms        14-18 MB   77-82 %
+   inline               12.6-12.7 %         0.28-0.31 / 0.48 ms        5.5 ms            26-29 MB   77 %
+   (probe CPU includes the analysis itself, equal in all modes.) Delivered rate 59.6-60.0 fps in all modes.
+   Tap -> first changed frame (pointer location on, 25 taps x2): not validated p50 38.3/40.4 ms, validated 38.7/36.7 ms.

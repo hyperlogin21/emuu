@@ -483,3 +483,7 @@ EMUU_GRPC_PID=<qemu pid> swift test --filter "LiveEmulatorTests|LiveDisplaySessi
 
 `docs/ARCHITECTURE.md` describes the modules. `docs/engine-findings.md` and `docs/memory-governor.md` hold
 the measurements behind the defaults.
+
+Display flicker, tearing or black frames: play the content, then run
+`emuu debug display-probe <instance> --duration 60 --save ~/Desktop/emuu-flicker` (counts torn, blank, out-of-order
+and flashing frames). Details and the test pattern/APK: "Diagnosing display artefacts" in `docs/ARCHITECTURE.md`.

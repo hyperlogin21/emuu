@@ -45,6 +45,8 @@ public final class EmulatorDisplayController {
     public var retryBaseDelay: Duration = .seconds(1)
     @ObservationIgnored private let logger = EmuuLogger(category: "display.controller")
     @ObservationIgnored private var recorder: FrameRecorder?
+    /// `EMUU_DISPLAY_DIAG` set: analyses presented frames and logs counts (see DisplayDiagnosticsMonitor).
+    @ObservationIgnored private var diagnostics: DisplayDiagnosticsMonitor?
 
     public init(session: EmulatorDisplaySession, instanceID: InstanceID? = nil, activityTracker: DisplayActivityTracker? = nil,
                 policy: DisplayActivityPolicy = DisplayActivityPolicy(), clock: any EmuuClock = SystemClock()) {
@@ -81,6 +83,12 @@ public final class EmulatorDisplayController {
         observerID = session.addObserver { [weak self] event in
             Task { @MainActor in self?.handle(event) }
         }
+        if let diag = DisplayDiagnosticsMonitor.fromEnvironment(label: instanceID?.rawValue ?? "display") {
+            diag.attach(renderer: view.frameSink, session: session)
+            diagnostics = diag
+            // Keep streaming while the window is covered, so the run is not interrupted by occlusion.
+            policy.pauseWhenHidden = false
+        }
     }
 
     /// Starts the frame stream.
@@ -108,6 +116,7 @@ public final class EmulatorDisplayController {
         directiveTask?.cancel()
         statsTask?.cancel()
         view.releaseAllInput()
+        diagnostics?.log(renderer: view.frameSink, session: session)
         await session.stop()
     }
 
@@ -182,6 +191,7 @@ public final class EmulatorDisplayController {
         retryTask?.cancel()
         directiveTask?.cancel()
         statsTask?.cancel()
+        diagnostics?.stop()
         view.frameSink.clear()
         if let id = instanceID { tracker?.remove(id) }
     }

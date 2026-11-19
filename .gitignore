@@ -15,3 +15,4 @@ xcuserdata/
 scripts/secure-test-apk/build/
 /dist/
 /*.raw
+scripts/flicker-test/apk/build/

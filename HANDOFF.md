@@ -2,6 +2,25 @@
 
 Written 2026-11-19. Repo: `/Users/leslie/dev/emuu` (git, origin = private GitHub; the orchestrator commits).
 
+## Status update (2026-11-19, display flicker in HD video / TikTok)
+
+- **Reported:** flicker in HD video (TikTok) in the native display. Investigated on an isolated instance with a
+  machine-readable test pattern (scripts/flicker-test: H.264/HEVC/VP9 720p/1080p 30/60 fps, SurfaceView/TextureView,
+  in-feed, GL, texture upload) and new diagnostics (`emuu debug display-probe`, `EMUU_DISPLAY_DIAG`; docs/ARCHITECTURE.md
+  "Diagnosing display artefacts"). Numbers: docs/evidence/flicker-measurements-2026-11-19.txt.
+- **Found:** the MMAP shared-memory region is not synchronised; under host load the engine writes into it (bottom row
+  first) while Emuu reads it → torn frames (an older band at the top). Seen only in the window process under load:
+  ~24–49 overlapping writes per 6 000 frames, about 40 % of those reads torn; 2 torn frames presented in one
+  unvalidated run. **Fix:** every MMAP read is validated (convert, then compare with the region; retry/drop) —
+  validated runs presented 0 torn frames. Cost ≈ +3.5 % of one core and +0.5 ms per frame at 60 fps.
+- **Not Emuu:** frames from the engine were otherwise clean (≈ 25 000 frames, MMAP = inline). One presented A-B-A flash
+  under load was a badly decoded video frame (guest/host decoder). Real TikTok was not tested (no Google sign-in);
+  the WindowServer composite could not be observed (screen locked). Whether this race is what the user sees in TikTok
+  is **unverified** — the user should run the probe/diag (below) and send the counts.
+- **User check:** quit Emuu, then `EMUU_DISPLAY_DIAG=1 /Users/leslie/dev/emuu/dist/Emuu.app/Contents/MacOS/Emuu`, play
+  TikTok for 2–3 minutes, then `grep display.diag ~/.emuu/logs/emuu.log | tail -5` (and the PNGs in
+  `~/.emuu/logs/display-diag/`). Headless alternative: `emuu debug display-probe emuu-dev2 --duration 60 --save ~/Desktop/emuu-flicker`.
+
 ## Status update (2026-11-19, automation farm)
 
 Goal now: an automation test farm on this MacBook (16 GB, 10 cores): **2 emulators at once**, reliably, for long
